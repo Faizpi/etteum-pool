@@ -1,4 +1,4 @@
-# PoolProx2 installer for Windows
+# Etteum Pool installer for Windows
 #
 # One-command install (PowerShell):
 #   irm https://raw.githubusercontent.com/priyo000/etteum-pool/main/install.ps1 | iex
@@ -10,8 +10,8 @@
 
 $ErrorActionPreference = "Stop"
 
-$RepoUrl     = if ($env:POOLPROX_REPO) { $env:POOLPROX_REPO } else { "https://github.com/priyo000/etteum-pool.git" }
-$DefaultDir  = if ($env:POOLPROX_HOME) { $env:POOLPROX_HOME } else { Join-Path $HOME "poolprox2" }
+$RepoUrl     = if ($env:ETTEUM_REPO) { $env:ETTEUM_REPO } else { "https://github.com/priyo000/etteum-pool.git" }
+$DefaultDir  = if ($env:ETTEUM_HOME) { $env:ETTEUM_HOME } else { Join-Path $HOME "etteum-pool" }
 
 function Step([string]$msg) { Write-Host "==> " -ForegroundColor Cyan -NoNewline; Write-Host $msg -ForegroundColor White }
 function Info([string]$msg) { Write-Host "    $msg" }
@@ -98,7 +98,7 @@ function Clone-Or-Update-Repo {
   $script:ProjectDir = $null
   if (Test-Path "package.json") {
     $pkg = Get-Content "package.json" -Raw
-    if ($pkg -match '"name"\s*:\s*"poolprox2"') {
+    if ($pkg -match '"name"\s*:\s*"etteum-pool"') {
       $script:ProjectDir = (Get-Location).Path
       Step "Using existing checkout: $($script:ProjectDir)"
       if (Test-Path ".git") {
@@ -178,14 +178,31 @@ function Run-Migrations {
     bun src/db/migrate.ts
     Ok "Migrations applied"
   } catch {
-    Warn "Migrations failed. Make sure PostgreSQL is running and DATABASE_URL in .env is correct."
-    Info "After fixing, run: bun run migrate"
+    Warn "Migrations failed. Database will be created on first run."
+    Info "After first run, you can re-run: bun src/db/migrate.ts"
+  }
+}
+
+function Install-CliSymlink {
+  Step "Installing CLI commands"
+  $target = Join-Path $HOME ".local\bin"
+  if (-not (Test-Path $target)) {
+    New-Item -ItemType Directory -Path $target -Force | Out-Null
+  }
+
+  # Copy etteum.ps1 to target
+  Copy-Item "$script:ProjectDir\etteum.ps1" "$target\etteum.ps1" -Force
+
+  Ok "Installed etteum.ps1 to $target"
+
+  if (-not ($env:Path -split ';' | Where-Object { $_ -eq $target })) {
+    Warn "Add to PATH: `$env:Path = `"$target;`$env:Path`""
   }
 }
 
 function Main {
   Write-Host ""
-  Write-Host "PoolProx2 Installer (Windows)" -ForegroundColor Blue
+  Write-Host "Etteum Pool Installer (Windows)" -ForegroundColor Blue
   Write-Host ""
 
   Ensure-Git
@@ -199,21 +216,34 @@ function Main {
   Setup-PythonVenv
   Build-Dashboard
   Run-Migrations
+  Install-CliSymlink
 
   Write-Host ""
-  Write-Host "Done. PoolProx2 is installed at $($script:ProjectDir)" -ForegroundColor Green
+  Write-Host "✓ Installation complete!" -ForegroundColor Green
   Write-Host ""
-  Write-Host "Next steps:"
-  Write-Host "  1. Edit .env if needed:"
-  Write-Host "       notepad $($script:ProjectDir)\.env"
-  Write-Host "  2. Make sure PostgreSQL is running and DATABASE_URL in .env points to a reachable DB."
-  Write-Host "  3. Start the server:"
-  Write-Host "       cd $($script:ProjectDir)"
-  Write-Host "       .\poolprox.ps1 start    (or: bun start)"
-  Write-Host "  4. Open the dashboard:"
-  Write-Host "       http://localhost:1631"
+  Write-Host "Etteum Pool is installed at: $($script:ProjectDir)" -ForegroundColor White
   Write-Host ""
-  Write-Host "Re-run this installer any time to pull updates and rebuild."
+
+  Write-Host "Quick Start:" -ForegroundColor White -BackgroundColor DarkBlue
+  Write-Host ""
+  Write-Host "  1. Start the server:" -ForegroundColor Cyan
+  Write-Host "     .\etteum.ps1 start"
+  Write-Host ""
+  Write-Host "  2. Open the dashboard:" -ForegroundColor Cyan
+  Write-Host "     http://localhost:1931"
+  Write-Host ""
+  Write-Host "  3. Add accounts via the dashboard UI"
+  Write-Host ""
+
+  Write-Host "Useful Commands:" -ForegroundColor White -BackgroundColor DarkBlue
+  Write-Host ""
+  Write-Host "  .\etteum.ps1 status     # Check server status"
+  Write-Host "  .\etteum.ps1 logs       # View server logs"
+  Write-Host "  .\etteum.ps1 stop       # Stop the server"
+  Write-Host "  .\etteum.ps1 restart    # Restart the server"
+  Write-Host ""
+
+  Write-Host "Tip: re-run this installer any time to pull updates and rebuild." -ForegroundColor Gray
 }
 
 Main

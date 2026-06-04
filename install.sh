@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PoolProx2 installer for Linux and macOS
+# Etteum Pool installer for Linux and macOS
 #
 # One-command install:
 #   curl -fsSL https://raw.githubusercontent.com/priyo000/etteum-pool/main/install.sh | bash
@@ -9,8 +9,8 @@
 
 set -euo pipefail
 
-REPO_URL="${POOLPROX_REPO:-https://github.com/priyo000/etteum-pool.git}"
-INSTALL_DIR_DEFAULT="${POOLPROX_HOME:-$HOME/poolprox2}"
+REPO_URL="${ETTEUM_REPO:-https://github.com/priyo000/etteum-pool.git}"
+INSTALL_DIR_DEFAULT="${ETTEUM_HOME:-$HOME/etteum-pool}"
 
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
@@ -98,7 +98,7 @@ ensure_python() {
 }
 
 clone_or_update_repo() {
-  if [[ -f "package.json" ]] && grep -q '"name": "poolprox2"' package.json 2>/dev/null; then
+  if [[ -f "package.json" ]] && grep -q '"name": "etteum-pool"' package.json 2>/dev/null; then
     PROJECT_DIR="$(pwd)"
     step "Using existing checkout: $PROJECT_DIR"
     if [[ -d ".git" ]]; then
@@ -176,31 +176,35 @@ build_dashboard() {
   ok "Dashboard built"
 }
 
-run_migrations_if_db() {
+run_migrations() {
   step "Running database migrations"
   if bun src/db/migrate.ts 2>&1; then
     ok "Migrations applied"
   else
-    warn "Migrations failed. Make sure PostgreSQL is running and DATABASE_URL in .env is correct."
-    info "After fixing, run: bun run migrate"
+    warn "Migrations failed. Database will be created on first run."
+    info "After first run, you can re-run: bun src/db/migrate.ts"
   fi
 }
 
 install_cli_symlink() {
-  if [[ -z "${POOLPROX_INSTALL_CLI:-}" ]]; then return; fi
+  step "Installing CLI commands"
   local target="$HOME/.local/bin"
   mkdir -p "$target"
-  ln -sf "$PROJECT_DIR/poolprox" "$target/poolprox"
-  chmod +x "$PROJECT_DIR/poolprox"
-  ok "Linked $target/poolprox -> $PROJECT_DIR/poolprox"
+
+  # Link etteum command
+  ln -sf "$PROJECT_DIR/etteum" "$target/etteum"
+  chmod +x "$PROJECT_DIR/etteum"
+
+  ok "Linked $target/etteum -> $PROJECT_DIR/etteum"
+
   case ":$PATH:" in
     *":$target:"*) ;;
-    *) info "Add to PATH: export PATH=\"$target:\$PATH\"" ;;
+    *) warn "Add to PATH: export PATH=\"$target:\$PATH\"" ;;
   esac
 }
 
 main() {
-  printf "\n${C_BOLD}${C_BLUE}PoolProx2 Installer${C_RESET}  ${C_DIM}(%s)${C_RESET}\n\n" "$OS"
+  printf "\n${C_BOLD}${C_BLUE}Etteum Pool Installer${C_RESET}  ${C_DIM}(%s)${C_RESET}\n\n" "$OS"
 
   ensure_git
   ensure_bun
@@ -208,29 +212,38 @@ main() {
   clone_or_update_repo
 
   cd "$PROJECT_DIR"
-  chmod +x poolprox 2>/dev/null || true
+  chmod +x etteum 2>/dev/null || true
 
   write_env_if_missing
   install_node_deps
   setup_python_venv
   build_dashboard
-  run_migrations_if_db
+  run_migrations
   install_cli_symlink
 
-  printf "\n${C_GREEN}${C_BOLD}Done.${C_RESET}  PoolProx2 is installed at ${C_BOLD}%s${C_RESET}\n\n" "$PROJECT_DIR"
-  cat <<EOF
-Next steps:
-  1. Edit .env if needed:
-       \$EDITOR $PROJECT_DIR/.env
-  2. Make sure PostgreSQL is running and DATABASE_URL points to a reachable DB.
-       Quick local DB: createdb pool_proxy
-  3. Start the server:
-       cd $PROJECT_DIR && ./poolprox start
-       or:  bun start
-  4. Open the dashboard:
-       http://localhost:1631
+  printf "\n${C_GREEN}${C_BOLD}✓ Installation complete!${C_RESET}\n\n"
+  printf "Etteum Pool is installed at: ${C_BOLD}%s${C_RESET}\n\n" "$PROJECT_DIR"
 
-Tip: re-run this installer any time to pull updates and rebuild.
+  cat <<EOF
+${C_BOLD}Quick Start:${C_RESET}
+
+  1. Start the server:
+     ${C_CYAN}etteum start${C_RESET}
+     or: cd $PROJECT_DIR && ./etteum start
+
+  2. Open the dashboard:
+     ${C_CYAN}http://localhost:1931${C_RESET}
+
+  3. Add accounts via the dashboard UI
+
+${C_BOLD}Useful Commands:${C_RESET}
+
+  etteum status     # Check server status
+  etteum logs       # View server logs
+  etteum stop       # Stop the server
+  etteum restart    # Restart the server
+
+${C_DIM}Tip: re-run this installer any time to pull updates and rebuild.${C_RESET}
 EOF
 }
 

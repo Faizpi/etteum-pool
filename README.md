@@ -1,266 +1,396 @@
-# Etteum
+# Etteum Pool
 
-A self-hosted proxy that pools accounts from **Kiro, Kiro Pro, CodeBuddy, Canva, Codex, and Qoder** behind a single OpenAI-compatible endpoint, with a real-time dashboard for managing accounts, quotas, and traffic.
+**AI Proxy Pool for Multiple Providers** — Load balancing, auto-warmup, and credit tracking for Kiro, CodeBuddy, Codex, Canva, and Qoder accounts.
 
-> One API key in. Many provider accounts out. Round-robin or sequential, with quota tracking, auto-warmup, error recovery, and an Anthropic-compatible streaming endpoint.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Bun](https://img.shields.io/badge/Bun-1.x-000000?logo=bun)](https://bun.sh)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 
-## Highlights
+---
 
-- **One OpenAI/Anthropic-compatible endpoint** — point any client (Cline, OpenWebUI, custom apps) at `http://localhost:1930/v1/chat/completions` or `/v1/messages`.
-- **Multi-provider account pool** — Kiro, Kiro Pro, CodeBuddy, Canva, Codex, Qoder.
-- **Live dashboard** — accounts, quotas, requests, usage charts, image studio.
-- **Auto WarmUp** — global interval, per-provider toggle, live countdown.
-- **Auto-login bot** — Camoufox/Chromium based, batch import via `email|password` lines or instant-login via refresh token.
-- **Load balancing** — round-robin or sequential, global default with per-provider override.
-- **Production runtime** — single Bun process for backend + static dashboard, optional systemd unit included.
+## Features
 
-## Quick install (one command)
+- **Multi-Provider Support** — Kiro, Kiro Pro, CodeBuddy, Codex, Canva, Qoder
+- **Automatic Load Balancing** — Distributes requests across healthy accounts
+- **Credit Tracking** — Real-time quota monitoring and exhaustion detection
+- **Auto-Warmup** — Periodic health checks to keep accounts ready
+- **Dashboard** — Beautiful web UI for monitoring and management
+- **Proxy Pool** — Optional residential proxy support for geo-restricted providers
+- **WebSocket Updates** — Real-time status updates in the dashboard
+- **Filter Rules** — Custom routing rules for different users/models
+- **Usage Analytics** — Track requests, tokens, and costs
 
-### Linux / macOS
+---
 
+## Quick Start
+
+### One-Command Install
+
+**Linux/macOS:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/priyo000/etteum-pool/main/install.sh | bash
 ```
 
-### Windows (PowerShell)
-
+**Windows (PowerShell):**
 ```powershell
 irm https://raw.githubusercontent.com/priyo000/etteum-pool/main/install.ps1 | iex
 ```
 
 The installer will:
+- ✅ Install dependencies (Bun, Python, Playwright, Camoufox)
+- ✅ Clone the repository
+- ✅ Configure `.env` with secure encryption key
+- ✅ Install Node.js and Python packages
+- ✅ Build the dashboard
+- ✅ Run database migrations
+- ✅ Set up CLI commands
 
-1. Install missing prerequisites (git, Bun, Python 3.10+).
-2. Clone the repo to `~/poolprox3` (override with `POOLPROX_HOME=/path/to/install`).
-3. Create the Python venv at `scripts/auth/.venv` and install Playwright + Camoufox.
-4. Install JS deps and build the dashboard.
-5. Generate `.env` with a random `ENCRYPTION_KEY`.
-6. Run database migrations against the local SQLite file at `data/poolprox3.db`.
+### Start the Server
 
-After it finishes, edit `.env` if needed and start the server:
-
+**Linux/macOS:**
 ```bash
-cd ~/poolprox3
-etteum start                 # Linux / macOS
-.\etteum.ps1 start          # Windows
+cd ~/etteum-pool  # or wherever it was installed
+./etteum start
 ```
 
-Dashboard: http://localhost:1931 — Backend: http://localhost:1930
+**Windows:**
+```powershell
+cd $HOME\etteum-pool
+.\etteum.ps1 start
+```
 
-## Manual install
+### Access the Dashboard
 
-If you prefer to run each step yourself:
+Open your browser to **http://localhost:1931**
+
+---
+
+## Installation
+
+### Prerequisites
+
+- **Bun 1.x** — JavaScript runtime (auto-installed)
+- **Python 3.10+** — For browser automation (auto-installed)
+- **Git** — For cloning the repo (auto-installed)
+- **500MB disk space** — For browsers and dependencies
+
+### Manual Installation
+
+If you prefer manual installation:
 
 ```bash
-# 1. Prereqs
-#    Bun:           https://bun.sh
-#    Python 3.10+:  https://python.org
+# Clone the repository
+git clone https://github.com/priyo000/etteum-pool.git
+cd etteum-pool
 
-# 2. Clone
-git clone https://github.com/priyo000/etteum-pool.git poolprox3
-cd poolprox3
+# Install Bun (if not installed)
+curl -fsSL https://bun.sh/install | bash
 
-# 3. JS deps
+# Install dependencies
 bun install
-(cd dashboard && bun install)
+cd dashboard && bun install && cd ..
 
-# 4. Python auth bot
+# Set up Python environment
 python3 -m venv scripts/auth/.venv
-scripts/auth/.venv/bin/pip install -r scripts/auth/requirements.txt
-scripts/auth/.venv/bin/python -m playwright install chromium
-scripts/auth/.venv/bin/python -m camoufox fetch
+source scripts/auth/.venv/bin/activate  # On Windows: scripts\auth\.venv\Scripts\activate
+pip install -r scripts/auth/requirements.txt
 
-# 5. Config
+# Install browsers
+python -m playwright install chromium
+python -m camoufox fetch
+
+# Configure environment
 cp .env.example .env
-# Edit .env — set DATABASE_PATH, ENCRYPTION_KEY (32 hex chars), etc.
+# Edit .env with your preferred editor
 
-# 6. DB
-bun run migrate
+# Build dashboard
+cd dashboard && bun run build && cd ..
 
-# 7. Build + run
-bun run build
-bun start
+# Run migrations
+bun src/db/migrate.ts
+
+# Start the server
+./etteum start
 ```
+
+---
+
+## Usage
+
+### CLI Commands
+
+**Linux/macOS (`etteum`):**
+```bash
+etteum start          # Start server in background
+etteum stop           # Stop server
+etteum restart        # Restart server
+etteum status         # Check server status
+etteum logs           # View server logs
+etteum build          # Rebuild dashboard and restart
+etteum dev            # Run in development mode (with hot reload)
+etteum migrate        # Run database migrations
+```
+
+**Windows (`etteum.ps1`):**
+```powershell
+.\etteum.ps1 start
+.\etteum.ps1 stop
+.\etteum.ps1 restart
+.\etteum.ps1 status
+.\etteum.ps1 logs
+```
+
+### Adding Accounts
+
+1. Open the dashboard at **http://localhost:1931**
+2. Navigate to **Accounts** page
+3. Click **Add Account** for your provider
+4. Choose your method:
+   - **Bulk Import** — Paste `email|password` lines (recommended)
+   - **Instant Login** — Use refresh tokens (Kiro Pro, Codex)
+   - **PAT Token** — Personal Access Token (Qoder)
+   - **Single Account** — Manual email/password entry
+
+### Configuring Auto-Warmup
+
+1. Go to **Accounts** page
+2. Toggle **Auto WarmUp** for each provider
+3. Set interval in **Settings** (default: 15 minutes)
+
+### Using the Proxy Pool (Optional)
+
+For providers with geo-restrictions (Canva):
+
+1. Go to **Proxy Pool** page
+2. Add proxies in format: `protocol://user:pass@host:port`
+3. Enable proxies in **Settings**
+
+---
 
 ## Configuration
 
-All settings live in `.env`. The defaults match what `install.sh` writes for an in-tree setup.
-
-| Key | Default | Description |
-|---|---|---|
-| `PORT` | `1930` | Backend / proxy port |
-| `DASHBOARD_PORT` | `1931` | Dashboard port |
-| `API_KEY` | `pool-proxy-secret-key` | Bearer token clients send to `/v1/*` and `/api/*` |
-| `DATABASE_PATH` | `./data/poolprox3.db` | SQLite database file path |
-| `ENCRYPTION_KEY` | random | 32 hex chars, used to encrypt account passwords/tokens at rest |
-| `AUTH_SCRIPT_PATH` | `./scripts/auth/login.py` | Auth bot entrypoint |
-| `PYTHON_PATH` | `./scripts/auth/.venv/bin/python` | Python interpreter from the venv |
-| `BROWSER_ENGINE` | `camoufox` | `camoufox` (anti-detect) or `chromium` |
-| `HEADLESS` | `true` | Run the auth browser headless |
-| `PROXY_URL` | empty | Outbound proxy for the auth bot |
-| `KIRO_PRO_UPGRADE` | `false` | Auto-upgrade kiro-pro after login using VCC pool |
-
-Most runtime settings (load-balancing method, auto-warmup interval, per-provider toggles, billing address) are stored in the `settings` table and edited from the dashboard at **Settings**.
-
-## Daily commands
-
-The repo ships with a small management CLI. After install it's at `./etteum` (Bash) and `./etteum.ps1` (PowerShell). The Bash CLI is symlinked into `~/.local/bin/etteum`, so you can call `etteum` from anywhere.
+Edit `.env` to customize:
 
 ```bash
-etteum start          # start backend + dashboard in background (ports 1930/1931)
-etteum stop           # stop this instance only (process-group scoped — safe for other instances)
-etteum restart        # restart
-etteum status         # show pid, group, and whether ports are listening
-etteum logs           # tail .etteum.log
-etteum logs 200       # last 200 lines
-etteum build          # rebuild dashboard + restart
-etteum dev            # foreground dev mode with Vite HMR (Ctrl-C to quit)
-etteum migrate        # run database migrations
+# Server ports
+PORT=1930                    # API port
+DASHBOARD_PORT=1931          # Dashboard port
+
+# Security
+API_KEY=your-secret-key      # API authentication
+ENCRYPTION_KEY=...           # Auto-generated, don't change
+
+# Database
+DATABASE_PATH=./data/poolprox3.db
+
+# Browser automation
+BROWSER_ENGINE=camoufox      # or chromium
+
+# Proxy (optional)
+PROXY_URL=                   # Global proxy for outbound requests
+
+# Kiro Pro (optional)
+KIRO_PRO_UPGRADE=true        # Enable Kiro Pro features
 ```
 
-`etteum stop` only kills the process group it started (tracked via `.etteum.pid`). It never does a global `pkill` on `bun src/index.ts`, so a separate poolprox/poolprox2 instance running on other ports is left untouched.
+### Environment Variables
 
-Or use Bun directly:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `1930` | Backend API port |
+| `DASHBOARD_PORT` | `1931` | Dashboard web UI port |
+| `API_KEY` | `pool-proxy-secret-key` | API authentication key |
+| `ENCRYPTION_KEY` | auto-generated | 32-char hex key for encrypting tokens |
+| `DATABASE_PATH` | `./data/poolprox3.db` | SQLite database location |
+| `BROWSER_ENGINE` | `camoufox` | Browser for login automation |
+| `PROXY_URL` | empty | Global proxy for all outbound requests |
+| `KIRO_PRO_UPGRADE` | `true` | Enable Kiro Pro features |
 
-```bash
-bun start            # production (build dashboard if missing, then run)
-bun run start:fast   # production (skip dashboard build, use existing dist)
-bun run dev          # dev mode with Vite HMR for the dashboard
-bun run build        # rebuild dashboard only
-bun run migrate      # run drizzle migrations
+---
+
+## Architecture
+
+### Providers
+
+| Provider | Auth Method | Features |
+|----------|-------------|----------|
+| **Kiro** | Email/Password | Claude Sonnet, free tier |
+| **Kiro Pro** | Refresh Token | Claude Opus, higher limits |
+| **CodeBuddy** | Email/Password | Multiple models, Tencent Cloud |
+| **Codex** | OAuth/Token | OpenAI models, GPT-4o |
+| **Canva** | Email/Password | Image generation (Flux Pro) |
+| **Qoder** | PAT Token | Claude models, job-based auth |
+
+### How It Works
+
+```
+User Request → Etteum API → Load Balancer → Provider → Response
+                  ↓
+            Dashboard (WebSocket updates)
+                  ↓
+            Auto-Warmup (periodic health checks)
 ```
 
-## Using the proxy
+1. **Request Routing** — API receives OpenAI-compatible requests
+2. **Account Selection** — Load balancer picks healthy account with credits
+3. **Provider Translation** — Transform request to provider-specific format
+4. **Response Streaming** — Stream response back in OpenAI format
+5. **Credit Tracking** — Update quota usage after each request
 
-PoolProx3 exposes both OpenAI and Anthropic-shaped endpoints. Send the `API_KEY` from `.env` as a bearer token.
+---
 
-### OpenAI-compatible
+## API Endpoints
+
+### Chat Completions (OpenAI-compatible)
 
 ```bash
 curl http://localhost:1930/v1/chat/completions \
-  -H "Authorization: Bearer pool-proxy-secret-key" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "kp-auto",
-    "messages": [{"role": "user", "content": "hello"}],
-    "stream": true
+    "model": "claude-sonnet-4.6",
+    "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
-### Anthropic-compatible
+### List Models
 
 ```bash
-curl http://localhost:1930/v1/messages \
-  -H "x-api-key: pool-proxy-secret-key" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "kp-auto",
-    "max_tokens": 1024,
-    "messages": [{"role": "user", "content": "hello"}]
-  }'
+curl http://localhost:1930/v1/models \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-### Model routing
-
-The model id you pass selects which pool answers the request:
-
-| Prefix / id | Provider |
-|---|---|
-| `kp-*` (e.g. `kp-auto`, `kp-opus-4.7`) | Kiro Pro |
-| `codebuddy-*`, `cb-auto` | CodeBuddy |
-| `canva-*` | Canva |
-| `qoder-*` | Qoder |
-| `codex-*`, `gpt-5-codex` | Codex (OpenAI) |
-| anything else | Kiro |
-
-`/v1/models` returns the full model list aggregated from every provider.
-
-## Adding accounts
-
-Open the dashboard at http://localhost:1931 → **Accounts** → pick a provider card → **Add**.
-
-Three modes:
-
-- **Single** — email + password, runs the login bot once.
-- **Bulk** — paste `email|password` per line for batch login.
-- **Instant Login** — paste refresh tokens (one per line) for `kiro-pro` and `codex`. No browser needed.
-
-Every provider card has an **Auto WarmUp** toggle. The interval is set in **Settings → Auto WarmUp** (global, in minutes). When enabled, the scheduler calls each provider's health-check on every tick to refresh quotas and recover errored accounts (skips `pending` ones).
-
-## Production deployment
-
-### systemd (Linux user service)
-
-The repo includes [poolprox3.service](poolprox3.service). After install:
+### Dashboard Stats
 
 ```bash
-sed -i "s|WorkingDirectory=.*|WorkingDirectory=$HOME/poolprox3|" poolprox3.service
-sed -i "s|/home/[^/]*/.bun/bin/bun|$HOME/.bun/bin/bun|"            poolprox3.service
-
-mkdir -p ~/.config/systemd/user
-cp poolprox3.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now poolprox3
-
-loginctl enable-linger $USER          # survive logout
-journalctl --user -u poolprox3 -f
+curl http://localhost:1930/api/stats \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-### Updating later
+---
+
+## Development
+
+### Project Structure
+
+```
+etteum-pool/
+├── src/
+│   ├── api/              # API routes (Hono)
+│   ├── auth/             # Login automation & warmup
+│   ├── db/               # Database schema & migrations
+│   ├── proxy/            # Provider implementations
+│   └── ws/               # WebSocket server
+├── dashboard/            # React dashboard
+│   ├── src/
+│   │   ├── components/   # UI components
+│   │   ├── pages/        # Page components
+│   │   └── hooks/        # Custom hooks
+│   └── public/           # Static assets
+├── scripts/
+│   ├── auth/             # Python browser automation
+│   └── production.ts     # Production server
+└── etteum                # CLI script
+```
+
+### Running in Development Mode
 
 ```bash
-git pull
-bun install
-etteum build        # rebuilds the dashboard and restarts
+# Terminal 1: Backend with hot reload
+bun run dev
+
+# Terminal 2: Dashboard with HMR
+cd dashboard
+bun run dev
 ```
+
+### Building for Production
+
+```bash
+cd dashboard
+bun run build
+cd ..
+./etteum start
+```
+
+---
 
 ## Troubleshooting
 
-**`bun: command not found` after install.**
-Open a new shell or `source ~/.bashrc` (Linux) / `source ~/.zshrc` (macOS). On Windows open a new PowerShell window.
-
-**Migrations fail.**
-Make sure the `data/` directory exists and `DATABASE_PATH` points to a writable location, then:
+### Playwright/Camoufox Not Found
 
 ```bash
-bun run migrate
+# Reinstall browsers
+source scripts/auth/.venv/bin/activate
+python -m playwright install chromium
+python -m camoufox fetch
 ```
 
-**Dashboard shows "Failed to fetch".**
-Backend isn't running on `PORT`. Check `etteum status` and `etteum logs`.
-
-**Auth bot fails with `Camoufox not found`.**
-Re-run the browser fetch:
+### Database Migration Failed
 
 ```bash
-scripts/auth/.venv/bin/python -m camoufox fetch
+# Delete database and start fresh
+rm -rf data/poolprox3.db
+
+# Run migrations again
+bun src/db/migrate.ts
 ```
 
-**Port already in use.**
-`etteum stop` then `etteum start`. To change ports, edit `PORT` / `DASHBOARD_PORT` in `.env` and run `etteum restart`.
+### Port Already in Use
 
-## Repo layout
+```bash
+# Check what's using the port
+lsof -i :1930  # macOS/Linux
+netstat -ano | findstr :1930  # Windows
 
+# Change ports in .env
+echo "PORT=1940" >> .env
+echo "DASHBOARD_PORT=1941" >> .env
 ```
-.
-├── src/                  Backend (Bun + Hono)
-│   ├── api/              REST endpoints (accounts, settings, stats, vcc)
-│   ├── auth/             Login + warmup queues, scheduler, runner
-│   ├── proxy/            OpenAI/Anthropic adapters, account pool, providers
-│   ├── db/               Drizzle schema + migrations
-│   └── ws/               WebSocket broadcast
-├── dashboard/            React + Vite + Tailwind
-├── scripts/              Bun helpers + Python auth bot
-│   └── auth/             Playwright/Camoufox login flows per provider
-├── drizzle/              SQL migration files
-├── install.sh            One-command installer (Linux/macOS)
-├── install.ps1           One-command installer (Windows)
-├── etteum                Bash management CLI
-├── etteum.ps1            PowerShell management CLI
-└── poolprox3.service     systemd user unit
+
+### Accounts Show "Exhausted"
+
+- Wait for auto-warmup to refresh credits
+- Click **Warmup** button manually
+- Check provider's quota limits
+
+---
+
+## Updating
+
+Re-run the installer to pull latest changes:
+
+```bash
+# Linux/macOS
+curl -fsSL https://raw.githubusercontent.com/priyo000/etteum-pool/main/install.sh | bash
+
+# Windows
+irm https://raw.githubusercontent.com/priyo000/etteum-pool/main/install.ps1 | iex
 ```
+
+Or manually:
+
+```bash
+cd ~/etteum-pool
+git pull
+bun install
+cd dashboard && bun install && bun run build && cd ..
+./etteum restart
+```
+
+---
 
 ## License
 
-This project is provided as-is for personal use. Don't use it to abuse third-party services or violate their TOS — that's on you.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/priyo000/etteum-pool/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/priyo000/etteum-pool/discussions)
+
+---
+
+**Made with ❤️ for the AI community**
