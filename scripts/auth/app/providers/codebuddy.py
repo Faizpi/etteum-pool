@@ -2580,6 +2580,33 @@ class CodeBuddyProviderAdapter(ProviderAdapter):
         if page is None:
             return None
 
+        # Retry with page restart on browser crash (up to 2 restarts)
+        for _quota_attempt in range(3):
+            try:
+                return await self._fetch_quota_inner(page, session)
+            except Exception as exc:
+                if is_browser_crash(exc) and _quota_attempt < 2:
+                    _codebuddy_auth_debug(
+                        f"browser crash in fetch_quota (attempt {_quota_attempt+1}/3): {str(exc)[:100]}"
+                    )
+                    await asyncio.sleep(1.5)
+                    try:
+                        page = await self._restart_browser_page(session)
+                    except Exception:
+                        _codebuddy_auth_debug("browser restart failed in fetch_quota")
+                        return None
+                    continue
+                # Non-crash errors — just return None (quota is best-effort)
+                _codebuddy_auth_debug(f"fetch_quota error: {str(exc)[:120]}")
+                return None
+
+        _codebuddy_auth_debug("fetch_quota exhausted all crash retries")
+        return None
+
+    async def _fetch_quota_inner(
+        self, page: Any, session: Any
+    ) -> dict[str, Any] | None:
+        """Inner fetch_quota logic — may raise on browser crash."""
         # 1. Claim gift credits via API (fast, no navigation)
         _codebuddy_auth_debug("claiming gift credits via API")
         gift_claimed, gift_credits = await self._try_claim_gift_via_api(page)
