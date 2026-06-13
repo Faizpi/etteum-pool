@@ -456,7 +456,7 @@ async function handleChatCompletion(body: ChatCompletionRequest) {
   // Claude Code's hardcoded haiku/sonnet/opus ids -> a model in the pool).
   body = { ...body, model: resolveModelAlias(normalizeModelId(body.model)) };
   const isStream = body.stream === true;
-  const { result, account, provider, durationMs } = await routeRequest(body, isStream);
+  const { result, account, provider, durationMs, compressionStats } = await routeRequest(body, isStream);
   let shouldReleaseTracking = true;
 
   try {
@@ -512,6 +512,7 @@ async function handleChatCompletion(body: ChatCompletionRequest) {
     responseBody: prepareLogBody(result.response),
     accountQuotaBefore: quotaBefore,
     accountQuotaAfter: quotaAfter,
+    compressionStats: compressionStats ?? null,
   };
 
     if (isStream && result.stream) {
