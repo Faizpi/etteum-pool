@@ -107,32 +107,35 @@ interface FlowViewProps {
 }
 
 function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
-  const W = 480, H = 380;
+  const W = 480, H = 360;
   const cx = W / 2, cy = H / 2;
-  const radius = 130;
+  const radius = 125;
 
   const activeStreamList = Array.from(activeStreams.values());
 
-  const providerCounts = logs.reduce<Record<string, number>>((acc, l) => {
-    acc[l.provider] = (acc[l.provider] || 0) + 1;
+  const providerCredits = logs.reduce<Record<string, number>>((acc, l) => {
+    const credit = (l.creditsUsed ?? 0);
+    if (credit > 0) acc[l.provider] = (acc[l.provider] || 0) + credit;
     return acc;
   }, {});
 
-  // Only show providers that have requests
-  const activeProviders = FLOW_PROVIDERS.filter((p) => providerCounts[p] > 0);
+  // Show providers that have credit usage
+  const creditProviders = FLOW_PROVIDERS.filter((p) => providerCredits[p] && providerCredits[p] > 0);
 
-  const providerPositions = activeProviders.map((p, i) => {
-    const angle = (i / Math.max(activeProviders.length, 1)) * 2 * Math.PI - Math.PI / 2;
+  const providerPositions = creditProviders.map((p, i) => {
+    const angle = (i / Math.max(creditProviders.length, 1)) * 2 * Math.PI - Math.PI / 2;
     return { id: p, x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
   });
 
   const recentRequests = logs.slice(0, 20);
 
+  const PANEL_WIDTH = 260;
+
   return (
-    <div className="flex gap-3 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden" style={{ minHeight: 400 }}>
+    <div className="flex gap-3 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden" style={{ height: 420 }}>
       {/* Left: Graph */}
-      <div className="relative flex-1" style={{ minWidth: 0 }}>
-        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+      <div className="relative flex-1 flex items-center justify-center" style={{ minWidth: 0 }}>
+        <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", maxHeight: 420 }}>
           <defs>
             {activeStreamList.map((stream) => {
               const target = providerPositions.find((p) => p.id === stream.provider);
@@ -191,12 +194,12 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
           {/* Provider nodes */}
           {providerPositions.map((p) => {
             const isActive = activeStreamList.some((s) => s.provider === p.id);
-            const count = providerCounts[p.id] || 0;
+            const credit = providerCredits[p.id] || 0;
             const color = PROVIDER_HEX[p.id] || "var(--primary)";
             return (
               <g key={p.id}>
                 <circle
-                  cx={p.x} cy={p.y} r={24}
+                  cx={p.x} cy={p.y} r={22}
                   fill="var(--background)"
                   stroke="var(--border)"
                   strokeWidth="1"
@@ -204,15 +207,15 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
                 {/* Colored dot in center of node */}
                 <circle cx={p.x} cy={p.y} r={4} fill={color} opacity="0.8" />
                 {/* Label below node */}
-                <text x={p.x} y={p.y + 15} textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="inherit">
+                <text x={p.x} y={p.y + 14} textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="inherit">
                   {p.id.length > 12 ? p.id.slice(0, 11) + "…" : p.id}
                 </text>
-                {/* Count badge */}
-                {count > 0 && (
+                {/* Credit badge */}
+                {credit > 0 && (
                   <g>
-                    <rect x={p.x + 14} y={p.y - 22} width={count > 99 ? 22 : 18} height={15} rx={4} fill="#14b8a6" opacity="0.9" />
-                    <text x={p.x + 14 + (count > 99 ? 11 : 9)} y={p.y - 12} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
-                      {count > 99 ? "99+" : count}
+                    <rect x={p.x + 14} y={p.y - 20} width={22} height={14} rx={4} fill={color} opacity="0.85" />
+                    <text x={p.x + 25} y={p.y - 10.5} textAnchor="middle" fill="#fff" fontSize="7.5" fontWeight="bold" fontFamily="inherit">
+                      {credit > 999 ? `${(credit / 1000).toFixed(1)}k` : credit}
                     </text>
                   </g>
                 )}
@@ -221,15 +224,15 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
           })}
         </svg>
 
-        {activeProviders.length === 0 && (
+        {creditProviders.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--muted-foreground)]">
-            No requests yet
+            No credit usage yet
           </div>
         )}
       </div>
 
       {/* Right: Recent Requests Panel */}
-      <div className="flex flex-col border-l border-[var(--border)] bg-[var(--card)]" style={{ width: 260, flexShrink: 0 }}>
+      <div className="flex flex-col border-l border-[var(--border)] bg-[var(--card)]" style={{ width: PANEL_WIDTH, flexShrink: 0 }}>
         <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between">
           <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Recent</h3>
           <span className="text-[10px] text-[var(--muted-foreground)]">{logs.length} total</span>
