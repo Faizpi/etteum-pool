@@ -161,10 +161,10 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
   };
 
   return (
-    <div className="flex gap-3 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden" style={{ height: 420 }}>
-      {/* Left: Graph with grid */}
-      <div className="relative flex-1 flex items-center justify-center" style={{ minWidth: 0, background: "var(--background)" }}>
-        <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", maxHeight: 420 }}>
+    <div className="flex flex-col gap-4">
+      {/* Top: Graph */}
+      <div className="relative rounded-lg border border-[var(--border)] overflow-hidden" style={{ height: 340, background: "var(--background)" }}>
+        <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", maxHeight: 340 }}>
           <defs>
             {/* Grid pattern */}
             <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -297,16 +297,16 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
         )}
       </div>
 
-      {/* Right: Recent Requests Panel */}
-      <div className="flex flex-col border-l border-[var(--border)] bg-[var(--card)]" style={{ width: PANEL_WIDTH, flexShrink: 0 }}>
-        <div className="px-3 py-2.5 border-b border-[var(--border)]">
+      {/* Bottom: Recent Requests Table */}
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col" style={{ height: 200 }}>
+        <div className="px-4 py-2.5 border-b border-[var(--border)] shrink-0">
           <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Recent Requests</h3>
         </div>
         {/* Table header */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border)]/60 bg-[var(--background)]/50">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)]/60 bg-[var(--background)]/50 shrink-0">
           <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase flex-1">Model</span>
-          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase w-20 text-right">In / Out</span>
-          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase w-10 text-right">When</span>
+          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase w-28 text-right">In / Out</span>
+          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase w-16 text-right">When</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           {recentRequests.map((req) => {
@@ -318,7 +318,7 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
               <div
                 key={req.id}
                 onClick={() => openDetail(req)}
-                className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--border)]/40 hover:bg-[var(--secondary)]/50 cursor-pointer min-w-0"
+                className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--border)]/40 hover:bg-[var(--secondary)]/50 cursor-pointer min-w-0"
               >
                 <span className="block h-1.5 w-1.5 rounded-full flex-shrink-0" style={{
                   backgroundColor: req.status === "success" ? "var(--success)"
@@ -327,19 +327,19 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
                 <span className="text-[11px] text-[var(--foreground)] truncate font-mono" title={req.model || ""}>
                   {req.model || "-"}
                 </span>
-                <span className="text-[10px] font-mono flex-shrink-0 text-right" style={{ color: "var(--warning)" }}>
+                <span className="text-[10px] font-mono flex-shrink-0 text-right w-28" style={{ color: "var(--warning)" }}>
                   {req.promptTokens ? (req.promptTokens >= 1000 ? `${(req.promptTokens / 1000).toFixed(1)}k` : req.promptTokens) : 0}
                 </span>
                 <span className="text-[9px] text-[var(--muted-foreground)] flex-shrink-0 text-center w-5">↑↓</span>
                 <span className="text-[10px] font-mono flex-shrink-0 text-right" style={{ color: "var(--success)" }}>
                   {req.completionTokens ? (req.completionTokens >= 1000 ? `${(req.completionTokens / 1000).toFixed(1)}k` : req.completionTokens) : 0}
                 </span>
-                <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0 w-14 text-right">{timeAgo}</span>
+                <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0 w-16 text-right">{timeAgo}</span>
               </div>
             );
           })}
           {recentRequests.length === 0 && (
-            <div className="px-3 py-8 text-center text-xs text-[var(--muted-foreground)]">No requests yet</div>
+            <div className="px-4 py-8 text-center text-xs text-[var(--muted-foreground)]">No requests yet</div>
           )}
         </div>
       </div>
