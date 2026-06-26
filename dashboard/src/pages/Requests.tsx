@@ -103,17 +103,13 @@ const PROVIDER_HEX: Record<string, string> = {
 interface FlowViewProps {
   activeStreams: Map<number, ActiveStream>;
   logs: RequestLog[];
+  openDetail: (req: RequestLog) => void;
 }
 
-function FlowView({ activeStreams, logs }: FlowViewProps) {
-  const providerCounts = logs.reduce<Record<string, number>>((acc, l) => {
-    acc[l.provider] = (acc[l.provider] || 0) + 1;
-    return acc;
-  }, {});
-
+function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
   const W = 700, H = 500;
   const cx = W / 2, cy = H / 2;
-  const radius = 190;
+  const radius = 180;
 
   const providerPositions = FLOW_PROVIDERS.map((p, i) => {
     const angle = (i / FLOW_PROVIDERS.length) * 2 * Math.PI - Math.PI / 2;
@@ -122,119 +118,189 @@ function FlowView({ activeStreams, logs }: FlowViewProps) {
 
   const activeStreamList = Array.from(activeStreams.values());
 
+  // Count requests per provider from logs
+  const providerCounts = logs.reduce<Record<string, number>>((acc, l) => {
+    acc[l.provider] = (acc[l.provider] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Recent requests for the right panel
+  const recentRequests = logs.slice(0, 30);
+
   return (
-    <div className="relative w-full rounded-lg border border-[var(--border)] bg-[var(--background)]" style={{ minHeight: 480 }}>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
-        <defs>
+    <div className="flex gap-4 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden" style={{ minHeight: 520 }}>
+      {/* Left: Graph */}
+      <div className="relative flex-1" style={{ minWidth: 0 }}>
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+          <defs>
+            {activeStreamList.map((stream) => {
+              const target = providerPositions.find((p) => p.id === stream.provider);
+              if (!target) return null;
+              const color = PROVIDER_HEX[stream.provider] || "#fff";
+              return (
+                <radialGradient key={`glow-${stream.startedAt}`} id={`glow-${stream.startedAt}`} cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor={color} stopOpacity="1" />
+                  <stop offset="100%" stopColor={color} stopOpacity="0" />
+                </radialGradient>
+              );
+            })}
+          </defs>
+
+          {/* Connection lines */}
+          {providerPositions.map((p) => {
+            const isActive = activeStreamList.some((s) => s.provider === p.id);
+            return (
+              <line
+                key={p.id}
+                x1={cx} y1={cy} x2={p.x} y2={p.y}
+                stroke={isActive ? (PROVIDER_HEX[p.id] || "var(--primary)") : "var(--border)"}
+                strokeWidth={isActive ? "1.5" : "1"}
+                opacity={isActive ? 0.5 : 0.25}
+              />
+            );
+          })}
+
+          {/* Active stream particles */}
           {activeStreamList.map((stream) => {
             const target = providerPositions.find((p) => p.id === stream.provider);
             if (!target) return null;
+            const pathD = `M ${cx} ${cy} L ${target.x} ${target.y}`;
             const color = PROVIDER_HEX[stream.provider] || "#fff";
             return (
-              <radialGradient key={`glow-${stream.startedAt}`} id={`glow-${stream.startedAt}`} cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor={color} stopOpacity="1" />
-                <stop offset="100%" stopColor={color} stopOpacity="0" />
-              </radialGradient>
+              <g key={stream.startedAt}>
+                <circle r="10" fill={color} opacity="0.15">
+                  <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
+                </circle>
+                <circle r="4.5" fill={color} opacity="0.95">
+                  <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
+                </circle>
+              </g>
             );
           })}
-        </defs>
 
-        {/* Connection lines */}
-        {providerPositions.map((p) => {
-          const isActive = activeStreamList.some((s) => s.provider === p.id);
-          return (
-            <line
-              key={p.id}
-              x1={cx} y1={cy} x2={p.x} y2={p.y}
-              stroke={isActive ? (PROVIDER_HEX[p.id] || "var(--primary)") : "var(--border)"}
-              strokeWidth={isActive ? "1.5" : "1"}
-              opacity={isActive ? 0.5 : 0.25}
-            />
-          );
-        })}
+          {/* Center node */}
+          <circle cx={cx} cy={cy} r={38} fill="var(--background)" stroke="var(--primary)" strokeWidth="2" />
+          <circle cx={cx} cy={cy} r={38} fill="var(--primary)" opacity="0.06" />
+          <text x={cx} y={cy - 5} textAnchor="middle" fill="var(--foreground)" fontSize="14" fontWeight="bold" fontFamily="inherit">
+            etteum
+          </text>
+          <text x={cx} y={cy + 12} textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="inherit">
+            {activeStreamList.length > 0 ? `${activeStreamList.length} active` : "pool"}
+          </text>
 
-        {/* Active stream particles */}
-        {activeStreamList.map((stream) => {
-          const target = providerPositions.find((p) => p.id === stream.provider);
-          if (!target) return null;
-          const pathD = `M ${cx} ${cy} L ${target.x} ${target.y}`;
-          const color = PROVIDER_HEX[stream.provider] || "#fff";
-          return (
-            <g key={stream.startedAt}>
-              {/* Glow halo */}
-              <circle r="10" fill={color} opacity="0.15">
-                <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
-              </circle>
-              {/* Main particle */}
-              <circle r="4.5" fill={color} opacity="0.95">
-                <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
-              </circle>
-            </g>
-          );
-        })}
-
-        {/* Center node */}
-        <circle cx={cx} cy={cy} r={38} fill="var(--background)" stroke="var(--primary)" strokeWidth="2" />
-        <circle cx={cx} cy={cy} r={38} fill="var(--primary)" opacity="0.06" />
-        <text x={cx} y={cy - 5} textAnchor="middle" fill="var(--foreground)" fontSize="14" fontWeight="bold" fontFamily="inherit">
-          etteum
-        </text>
-        <text x={cx} y={cy + 12} textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="inherit">
-          {activeStreamList.length > 0 ? `${activeStreamList.length} active` : "pool"}
-        </text>
-
-        {/* Provider nodes */}
-        {providerPositions.map((p) => {
-          const isActive = activeStreamList.some((s) => s.provider === p.id);
-          const count = providerCounts[p.id] || 0;
-          const color = PROVIDER_HEX[p.id] || "var(--primary)";
-          // Shorten label for display
-          const label = p.id.length > 8 ? p.id.slice(0, 7) + "…" : p.id;
-          return (
-            <g key={p.id}>
-              {/* Active glow ring */}
-              {isActive && (
+          {/* Provider nodes */}
+          {providerPositions.map((p) => {
+            const isActive = activeStreamList.some((s) => s.provider === p.id);
+            const count = providerCounts[p.id] || 0;
+            const color = PROVIDER_HEX[p.id] || "var(--primary)";
+            const label = p.id.length > 10 ? p.id.slice(0, 9) + "…" : p.id;
+            return (
+              <g key={p.id}>
+                {/* Active glow ring */}
+                {isActive && (
+                  <circle
+                    cx={p.x} cy={p.y} r={28}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth="6"
+                    opacity="0.18"
+                  />
+                )}
                 <circle
-                  cx={p.x} cy={p.y} r={28}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="6"
-                  opacity="0.18"
+                  cx={p.x} cy={p.y} r={22}
+                  fill="var(--background)"
+                  stroke={isActive ? color : "var(--border)"}
+                  strokeWidth={isActive ? "2.5" : "1.5"}
+                  opacity={isActive ? 1 : 0.7}
                 />
-              )}
-              <circle
-                cx={p.x} cy={p.y} r={22}
-                fill="var(--background)"
-                stroke={isActive ? color : "var(--border)"}
-                strokeWidth={isActive ? "2.5" : "1.5"}
-                opacity={isActive ? 1 : 0.7}
-              />
-              {/* Colored dot */}
-              <circle cx={p.x} cy={p.y - 6} r={4} fill={color} opacity={isActive ? 1 : 0.4} />
-              <text x={p.x} y={p.y + 9} textAnchor="middle" fill="var(--foreground)" fontSize="8.5" fontFamily="inherit" opacity={isActive ? 1 : 0.6}>
-                {label}
-              </text>
-              {/* Request count badge */}
-              {count > 0 && (
-                <g>
-                  <circle cx={p.x + 17} cy={p.y - 17} r={9} fill={color} opacity="0.9" />
-                  <text x={p.x + 17} y={p.y - 13} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
-                    {count > 99 ? "99+" : count}
-                  </text>
-                </g>
-              )}
-            </g>
-          );
-        })}
-      </svg>
+                {/* Colored dot */}
+                <circle cx={p.x} cy={p.y - 6} r={4} fill={color} opacity={isActive ? 1 : 0.4} />
+                <text x={p.x} y={p.y + 9} textAnchor="middle" fill="var(--foreground)" fontSize="8.5" fontFamily="inherit" opacity={isActive ? 1 : 0.6}>
+                  {label}
+                </text>
+                {/* Request count badge */}
+                {count > 0 && (
+                  <g>
+                    <circle cx={p.x + 17} cy={p.y - 17} r={9} fill={color} opacity="0.9" />
+                    <text x={p.x + 17} y={p.y - 13} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
+                      {count > 99 ? "99+" : count}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+        </svg>
 
-      {/* Legend */}
-      <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs text-[var(--muted-foreground)]">
-        <span className="flex items-center gap-1.5">
-          <span className="block h-1.5 w-1.5 rounded-full bg-[var(--success)] opacity-80" />
-          Particle = active stream
-        </span>
-        <span>{logs.length} total requests</span>
+        {/* Legend */}
+        <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+          <span className="flex items-center gap-1.5">
+            <span className="block h-1.5 w-1.5 rounded-full bg-[var(--success)] opacity-80" />
+            Particle = active stream
+          </span>
+          <span>{logs.length} total requests</span>
+        </div>
+      </div>
+
+      {/* Right: Recent Requests Panel */}
+      <div className="flex flex-col border-l border-[var(--border)] bg-[var(--card)]" style={{ width: 320, flexShrink: 0 }}>
+        <div className="px-4 py-3 border-b border-[var(--border)]">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Recent Requests</h3>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <table className="w-full">
+            <thead className="sticky top-0 bg-[var(--card)]">
+              <tr className="border-b border-[var(--border)]">
+                <th className="text-left text-[10px] font-medium text-[var(--muted-foreground)] uppercase px-3 py-2">Model</th>
+                <th className="text-right text-[10px] font-medium text-[var(--muted-foreground)] uppercase px-3 py-2">In / Out</th>
+                <th className="text-right text-[10px] font-medium text-[var(--muted-foreground)] uppercase px-3 py-2">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentRequests.map((req) => {
+                const elapsed = Date.now() - new Date(req.createdAt).getTime();
+                const timeAgo = elapsed < 60000 ? "just now"
+                  : elapsed < 3600000 ? `${Math.floor(elapsed / 60000)}m ago`
+                  : `${Math.floor(elapsed / 3600000)}h ago`;
+                return (
+                  <tr
+                    key={req.id}
+                    onClick={() => openDetail(req)}
+                    className="border-b border-[var(--border)]/50 hover:bg-[var(--secondary)]/50 cursor-pointer"
+                  >
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="block h-1.5 w-1.5 rounded-full flex-shrink-0" style={{
+                          backgroundColor: req.status === "success" ? "var(--success)"
+                            : req.status === "streaming" ? "var(--warning)" : "var(--error)"
+                        }} />
+                        <span className="text-xs text-[var(--foreground)] truncate max-w-[140px]" title={req.model || ""}>
+                          {req.model || "-"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <span className="text-xs font-mono" style={{ color: "var(--warning)" }}>
+                        {req.promptTokens || 0}
+                      </span>
+                      <span className="text-[10px] text-[var(--muted-foreground)] mx-0.5">↑</span>
+                      <span className="text-xs font-mono" style={{ color: "var(--success)" }}>
+                        {req.completionTokens || 0}
+                      </span>
+                      <span className="text-[10px] text-[var(--muted-foreground)]">↓</span>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <span className="text-xs text-[var(--muted-foreground)]">{timeAgo}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {recentRequests.length === 0 && (
+                <tr><td colSpan={3} className="px-3 py-8 text-center text-xs text-[var(--muted-foreground)]">No requests yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -460,7 +526,7 @@ export default function Requests() {
       )}
 
       {viewMode === "flow" && (
-        <FlowView activeStreams={activeStreams} logs={logs} />
+        <FlowView activeStreams={activeStreams} logs={logs} openDetail={openDetail} />
       )}
 
       {viewMode === "table" && (
