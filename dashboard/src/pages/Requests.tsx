@@ -107,14 +107,9 @@ interface FlowViewProps {
 }
 
 function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
-  const W = 560, H = 400;
+  const W = 480, H = 380;
   const cx = W / 2, cy = H / 2;
-  const radius = 145;
-
-  const providerPositions = FLOW_PROVIDERS.map((p, i) => {
-    const angle = (i / FLOW_PROVIDERS.length) * 2 * Math.PI - Math.PI / 2;
-    return { id: p, x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
-  });
+  const radius = 130;
 
   const activeStreamList = Array.from(activeStreams.values());
 
@@ -123,10 +118,18 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
     return acc;
   }, {});
 
+  // Only show providers that have requests
+  const activeProviders = FLOW_PROVIDERS.filter((p) => providerCounts[p] > 0);
+
+  const providerPositions = activeProviders.map((p, i) => {
+    const angle = (i / Math.max(activeProviders.length, 1)) * 2 * Math.PI - Math.PI / 2;
+    return { id: p, x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+  });
+
   const recentRequests = logs.slice(0, 20);
 
   return (
-    <div className="flex gap-3 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden" style={{ minHeight: 420 }}>
+    <div className="flex gap-3 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden" style={{ minHeight: 400 }}>
       {/* Left: Graph */}
       <div className="relative flex-1" style={{ minWidth: 0 }}>
         <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
@@ -152,8 +155,8 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
                 key={p.id}
                 x1={cx} y1={cy} x2={p.x} y2={p.y}
                 stroke={isActive ? (PROVIDER_HEX[p.id] || "var(--primary)") : "var(--border)"}
-                strokeWidth={isActive ? "1" : "0.5"}
-                opacity={isActive ? 0.35 : 0.15}
+                strokeWidth="0.5"
+                opacity={isActive ? 0.25 : 0.08}
               />
             );
           })}
@@ -166,24 +169,23 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
             const color = PROVIDER_HEX[stream.provider] || "#fff";
             return (
               <g key={stream.startedAt}>
-                <circle r="7" fill={color} opacity="0.12">
+                <circle r="6" fill={color} opacity="0.1">
                   <animateMotion dur="1.2s" repeatCount="indefinite" path={pathD} />
                 </circle>
-                <circle r="3" fill={color} opacity="0.9">
+                <circle r="2.5" fill={color} opacity="0.85">
                   <animateMotion dur="1.2s" repeatCount="indefinite" path={pathD} />
                 </circle>
               </g>
             );
           })}
 
-          {/* Center node */}
-          <circle cx={cx} cy={cy} r={28} fill="var(--background)" stroke="var(--primary)" strokeWidth="1.5" />
-          <circle cx={cx} cy={cy} r={28} fill="var(--primary)" opacity="0.05" />
-          <text x={cx} y={cy - 3} textAnchor="middle" fill="var(--foreground)" fontSize="11" fontWeight="bold" fontFamily="inherit">
+          {/* Center node - big green circle like reference */}
+          <circle cx={cx} cy={cy} r={42} fill="#162320" stroke="#22c55e" strokeWidth="2" />
+          <text x={cx} y={cy - 4} textAnchor="middle" fill="#e2e8f0" fontSize="15" fontWeight="bold" fontFamily="inherit">
             etteum
           </text>
-          <text x={cx} y={cy + 10} textAnchor="middle" fill="var(--muted-foreground)" fontSize="8" fontFamily="inherit">
-            {activeStreamList.length > 0 ? `${activeStreamList.length} active` : "pool"}
+          <text x={cx} y={cy + 14} textAnchor="middle" fill="#94a3b8" fontSize="10" fontFamily="inherit">
+            pool
           </text>
 
           {/* Provider nodes */}
@@ -191,27 +193,25 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
             const isActive = activeStreamList.some((s) => s.provider === p.id);
             const count = providerCounts[p.id] || 0;
             const color = PROVIDER_HEX[p.id] || "var(--primary)";
-            const label = p.id.length > 10 ? p.id.slice(0, 9) + "…" : p.id;
             return (
               <g key={p.id}>
-                {isActive && (
-                  <circle cx={p.x} cy={p.y} r={20} fill="none" stroke={color} strokeWidth="4" opacity="0.12" />
-                )}
                 <circle
-                  cx={p.x} cy={p.y} r={16}
+                  cx={p.x} cy={p.y} r={24}
                   fill="var(--background)"
-                  stroke={isActive ? color : "var(--border)"}
-                  strokeWidth={isActive ? "1.5" : "1"}
-                  opacity={isActive ? 1 : 0.65}
+                  stroke="var(--border)"
+                  strokeWidth="1"
                 />
-                <circle cx={p.x} cy={p.y - 5} r={3} fill={color} opacity={isActive ? 1 : 0.35} />
-                <text x={p.x} y={p.y + 7} textAnchor="middle" fill="var(--foreground)" fontSize="7.5" fontFamily="inherit" opacity={isActive ? 1 : 0.55}>
-                  {label}
+                {/* Colored dot in center of node */}
+                <circle cx={p.x} cy={p.y} r={4} fill={color} opacity="0.8" />
+                {/* Label below node */}
+                <text x={p.x} y={p.y + 15} textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="inherit">
+                  {p.id.length > 12 ? p.id.slice(0, 11) + "…" : p.id}
                 </text>
+                {/* Count badge */}
                 {count > 0 && (
                   <g>
-                    <circle cx={p.x + 13} cy={p.y - 13} r={7} fill={color} opacity="0.85" />
-                    <text x={p.x + 13} y={p.y - 9} textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="inherit">
+                    <rect x={p.x + 14} y={p.y - 22} width={count > 99 ? 22 : 18} height={15} rx={4} fill="#14b8a6" opacity="0.9" />
+                    <text x={p.x + 14 + (count > 99 ? 11 : 9)} y={p.y - 12} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
                       {count > 99 ? "99+" : count}
                     </text>
                   </g>
@@ -220,6 +220,12 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
             );
           })}
         </svg>
+
+        {activeProviders.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--muted-foreground)]">
+            No requests yet
+          </div>
+        )}
       </div>
 
       {/* Right: Recent Requests Panel */}
