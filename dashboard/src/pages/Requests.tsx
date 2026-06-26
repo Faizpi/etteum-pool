@@ -298,7 +298,7 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
       </div>
 
       {/* Right: Recent Requests Table */}
-      <div className="md:w-80 rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col shrink-0" style={{ maxHeight: 400 }}>
+      <div className="md:w-[340px] w-80 rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col shrink-0" style={{ maxHeight: 400 }}>
         <div className="px-4 py-2.5 border-b border-[var(--border)] shrink-0">
           <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Recent Requests</h3>
         </div>
@@ -324,8 +324,8 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
                   backgroundColor: req.status === "success" ? "var(--success)"
                     : req.status === "streaming" ? "var(--warning)" : "var(--error)"
                 }} />
-                <span className="text-[11px] text-[var(--foreground)] truncate flex-1 font-mono" title={req.model || ""}>
-                  {req.model || "-"}
+                <span className="text-[11px] text-[var(--foreground)] flex-1 font-mono min-w-0" style={{ maxWidth: 140 }} title={req.model || ""}>
+                  {req.model ? (req.model.length > 16 ? req.model.slice(0, 16) + "…" : req.model) : "-"}
                 </span>
                 <span className="text-[10px] font-mono flex-shrink-0 text-right w-28" style={{ color: "var(--warning)" }}>
                   {req.promptTokens ? (req.promptTokens >= 1000 ? `${(req.promptTokens / 1000).toFixed(1)}k` : req.promptTokens) : 0}
