@@ -296,7 +296,8 @@ export default function Requests() {
 
   async function loadQuotas() {
     try {
-      const accounts = (await fetchAccounts()) as { id: number; provider: string; quotaLimit?: number; quotaRemaining?: number }[];
+      const res = await fetchAccounts() as { data: { id: number; provider: string; quotaLimit?: number; quotaRemaining?: number }[] };
+      const accounts = res?.data || [];
       const quotas: Record<string, { total: number; remaining: number }> = {};
       for (const a of accounts) {
         const p = a.provider;
