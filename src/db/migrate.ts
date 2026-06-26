@@ -198,10 +198,14 @@ function ensureTablesExist() {
       label text,
       models_json text NOT NULL,
       enabled integer DEFAULT 1 NOT NULL,
+      last_used_index integer DEFAULT 0 NOT NULL,
       created_at integer NOT NULL,
       updated_at integer
     )`,
     `CREATE INDEX IF NOT EXISTS model_combos_name_idx ON model_combos (name)`,
+
+    // ── Add last_used_index to existing model_combos ──
+    `ALTER TABLE model_combos ADD COLUMN last_used_index INTEGER DEFAULT 0`,
 
     // ── custom_models ──
     `CREATE TABLE IF NOT EXISTS custom_models (

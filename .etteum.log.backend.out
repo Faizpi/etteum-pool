@@ -1,0 +1,34 @@
+[DB] Running migrations...
+[DB] Migrations complete.
+[DB] Seeded 18 filter rules
+[BYOK] Warming up cache...
+[BYOK] Cache warmed up successfully
+
+╔══════════════════════════════════════════════════╗
+║           🔄 Pool Proxy Server                   ║
+╠══════════════════════════════════════════════════╣
+║  HTTP:      http://localhost:1930               ║
+║  WebSocket: ws://localhost:1930/ws              ║
+║  Database:  SQLite                              ║
+║  Dashboard: http://localhost:1931              ║
+╠══════════════════════════════════════════════════╣
+║  Endpoints:                                      ║
+║    POST /v1/chat/completions  (proxy)            ║
+║    POST /v1/messages          (Anthropic)        ║
+║    GET  /v1/models            (models)           ║
+║    GET  /api/accounts         (management)       ║
+║    GET  /api/stats            (statistics)       ║
+║    WS   /ws                   (real-time)        ║
+╚══════════════════════════════════════════════════╝
+
+[WS] Client connected (total: 1)
+<-- POST /api/keys/test
+--> POST /api/keys/test [32m200[0m 2ms
+<-- POST /api/keys/test
+--> POST /api/keys/test [32m200[0m 1ms
+[WS] Client connected (total: 2)
+[WS] Client disconnected (total: 1)
+<-- POST /api/keys/test
+--> POST /api/keys/test [32m200[0m 0ms
+<-- POST /api/keys/test
+--> POST /api/keys/test [32m200[0m 1ms

@@ -197,6 +197,7 @@ export const modelCombos = sqliteTable("model_combos", {
   label: text("label"), // human-readable label
   modelsJson: text("models_json", { mode: "json" }).notNull().$defaultFn(() => []), // ordered array: ["qwen-plus", "gemini-3-flash", "antigravity-gemini-3-pro"]
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  lastUsedIndex: integer("last_used_index").notNull().default(0), // round-robin pointer
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 }, (table) => [

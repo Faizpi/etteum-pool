@@ -1,0 +1,16 @@
+30 |     return;
+31 |   }
+32 | 
+33 |   if (!skipBuild || !distExists) {
+34 |     console.log("[production] Building dashboard...");
+35 |     const proc = Bun.spawn([process.execPath, "run", "build"], {
+                          ^
+ENOENT: no such file or directory, uv_spawn 'C:\Users\Faiz\.bun\bin\bun.exe'
+    path: "C:\\Users\\Faiz\\.bun\\bin\\bun.exe",
+ syscall: "uv_spawn",
+   errno: -4058,
+    code: "ENOENT"
+
+      at buildDashboard (C:\Users\Faiz\etteum-pool\scripts\production.ts:35:22)
+
+Bun v1.3.14 (Windows x64)
