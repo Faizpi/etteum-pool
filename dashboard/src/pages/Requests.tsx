@@ -161,10 +161,10 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Top: Graph */}
-      <div className="relative rounded-lg border border-[var(--border)] overflow-hidden" style={{ height: 340, background: "var(--background)" }}>
-        <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", maxHeight: 340 }}>
+    <div className="flex flex-col md:flex-row gap-4 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden p-4" style={{ minHeight: 420 }}>
+      {/* Left: Graph */}
+      <div className="relative flex-1 rounded-lg border border-[var(--border)] overflow-hidden" style={{ minHeight: 400, background: "var(--background)" }}>
+        <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", maxHeight: 400 }}>
           <defs>
             {/* Grid pattern */}
             <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -297,8 +297,8 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
         )}
       </div>
 
-      {/* Bottom: Recent Requests Table */}
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col" style={{ height: 200 }}>
+      {/* Right: Recent Requests Table */}
+      <div className="md:w-80 rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col shrink-0" style={{ maxHeight: 400 }}>
         <div className="px-4 py-2.5 border-b border-[var(--border)] shrink-0">
           <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Recent Requests</h3>
         </div>
@@ -324,7 +324,7 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
                   backgroundColor: req.status === "success" ? "var(--success)"
                     : req.status === "streaming" ? "var(--warning)" : "var(--error)"
                 }} />
-                <span className="text-[11px] text-[var(--foreground)] truncate font-mono" title={req.model || ""}>
+                <span className="text-[11px] text-[var(--foreground)] truncate flex-1 font-mono" title={req.model || ""}>
                   {req.model || "-"}
                 </span>
                 <span className="text-[10px] font-mono flex-shrink-0 text-right w-28" style={{ color: "var(--warning)" }}>
