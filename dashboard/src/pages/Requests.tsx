@@ -230,8 +230,8 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
           })}
 
           {/* Center node */}
-          <rect x={cx - 38} y={cy - 20} width={76} height={40} rx={8} fill="#1a1a2e" stroke="#22c55e" strokeWidth="2" />
-          <text x={cx} y={cy + 5} textAnchor="middle" fill="#e2e8f0" fontSize="14" fontWeight="bold" fontFamily="inherit">
+          <rect x={cx - 38} y={cy - 20} width={76} height={40} rx={8} fill="var(--card)" stroke="#22c55e" strokeWidth="2" />
+          <text x={cx} y={cy + 5} textAnchor="middle" fill="var(--foreground)" fontSize="14" fontWeight="bold" fontFamily="inherit">
             etteum
           </text>
 
