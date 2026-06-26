@@ -193,9 +193,9 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
                 key={p.id}
                 d={`M ${cx} ${cy} Q ${cpx} ${cpy} ${p.x} ${p.y}`}
                 fill="none"
-                stroke={isActive ? (PROVIDER_HEX[p.id] || "var(--primary)") : "var(--border)"}
-                strokeWidth={isActive ? "1.2" : "0.5"}
-                opacity={isActive ? 0.5 : 0.15}
+                stroke={isActive ? (PROVIDER_HEX[p.id] || "#e2e8f0") : "#d4d4d8"}
+                strokeWidth={isActive ? "1.5" : "1"}
+                opacity={isActive ? 0.7 : 0.35}
               />
             );
           })}
@@ -298,23 +298,23 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
               <div
                 key={req.id}
                 onClick={() => openDetail(req)}
-                className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--border)]/40 hover:bg-[var(--secondary)]/50 cursor-pointer"
+                className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--border)]/40 hover:bg-[var(--secondary)]/50 cursor-pointer min-w-0"
               >
                 <span className="block h-1.5 w-1.5 rounded-full flex-shrink-0" style={{
                   backgroundColor: req.status === "success" ? "var(--success)"
                     : req.status === "streaming" ? "var(--warning)" : "var(--error)"
                 }} />
-                <span className="text-[11px] text-[var(--foreground)] truncate flex-1 font-mono" title={req.model || ""}>
+                <span className="text-[11px] text-[var(--foreground)] truncate font-mono" title={req.model || ""}>
                   {req.model || "-"}
                 </span>
-                <span className="text-[10px] font-mono flex-shrink-0 w-20 text-right" style={{ color: "var(--warning)" }}>
+                <span className="text-[10px] font-mono flex-shrink-0 text-right" style={{ color: "var(--warning)" }}>
                   {req.promptTokens ? (req.promptTokens >= 1000 ? `${(req.promptTokens / 1000).toFixed(1)}k` : req.promptTokens) : 0}
                 </span>
                 <span className="text-[9px] text-[var(--muted-foreground)] flex-shrink-0 text-center w-5">↑↓</span>
-                <span className="text-[10px] font-mono flex-shrink-0 text-right w-12" style={{ color: "var(--success)" }}>
+                <span className="text-[10px] font-mono flex-shrink-0 text-right" style={{ color: "var(--success)" }}>
                   {req.completionTokens ? (req.completionTokens >= 1000 ? `${(req.completionTokens / 1000).toFixed(1)}k` : req.completionTokens) : 0}
                 </span>
-                <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0 w-12 text-right">{timeAgo}</span>
+                <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0 w-14 text-right">{timeAgo}</span>
               </div>
             );
           })}
