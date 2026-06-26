@@ -153,6 +153,13 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
     byok: "BY",
   };
 
+  const LOGO_IMAGES: Record<string, string> = {
+    kiro: "/kiro.png",
+    "kiro-pro": "/kiro.png",
+    qoder: "/qoder.png",
+    mimo: "/mimo.png",
+  };
+
   return (
     <div className="flex gap-3 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden" style={{ height: 420 }}>
       {/* Left: Graph with grid */}
@@ -233,10 +240,10 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
             const isActive = activeStreamList.some((s) => s.provider === p.id);
             const quota = accountQuotas[p.id] || { total: 0, remaining: 0 };
             const color = LOGO_COLORS[p.id] || "#64748b";
-            const label = LOGO_LABELS[p.id] || p.id.slice(0, 2).toUpperCase();
             const pct = quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0;
-            const pw = 120, ph = 36;
+            const pw = 110, ph = 36;
             const nodeX = p.x, nodeY = p.y;
+            const logoSrc = LOGO_IMAGES[p.id];
             return (
               <g key={p.id}>
                 {/* Node background */}
@@ -247,13 +254,26 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
                   stroke={isActive ? color : "var(--border)"}
                   strokeWidth={isActive ? "1.5" : "1"}
                 />
-                {/* Logo circle */}
-                <circle cx={nodeX - pw / 2 + 18} cy={nodeY} r={10} fill={color} opacity={isActive ? 1 : 0.5} />
-                <text x={nodeX - pw / 2 + 18} y={nodeY + 4} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
-                  {label}
-                </text>
+                {/* Logo image or fallback circle */}
+                {logoSrc ? (
+                  <image
+                    href={logoSrc}
+                    x={nodeX - pw / 2 + 4}
+                    y={nodeY - 12}
+                    width={24}
+                    height={24}
+                    opacity={isActive ? 1 : 0.5}
+                  />
+                ) : (
+                  <>
+                    <circle cx={nodeX - pw / 2 + 16} cy={nodeY} r={10} fill={color} opacity={isActive ? 1 : 0.5} />
+                    <text x={nodeX - pw / 2 + 16} y={nodeY + 4} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
+                      {LOGO_LABELS[p.id]}
+                    </text>
+                  </>
+                )}
                 {/* Provider name */}
-                <text x={nodeX + 5} y={nodeY + 4} textAnchor="start" fill="var(--foreground)" fontSize="10" fontFamily="inherit" fontWeight="500">
+                <text x={nodeX - pw / 2 + 32} y={nodeY + 4} textAnchor="start" fill="var(--foreground)" fontSize="10" fontFamily="inherit" fontWeight="500">
                   {p.id.length > 12 ? p.id.slice(0, 11) + "…" : p.id}
                 </text>
                 {/* Quota badge */}
