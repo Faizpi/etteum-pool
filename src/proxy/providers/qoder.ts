@@ -927,7 +927,7 @@ export class QoderProvider extends BaseProvider {
         let nextToolIdx = 0;
         const pendingToolCalls = new Map<number, { id: string; function: { name: string; arguments: string } }>();
         let lastActivity = Date.now();
-        const STREAM_TIMEOUT = 300000; // 5 minutes
+        const STREAM_TIMEOUT = 900000; // 15 minutes
         let streamActive = true;
 
         const enqueue = (delta: any, finishReason: string | null = null, usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) => {

@@ -448,6 +448,73 @@ export default function Models() {
         ))}
       </div>
 
+      {/* Model Combos — drag-drop reorderable model chains */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">Model Combos</h2>
+            <p className="text-sm text-[var(--muted-foreground)]">Create named chains — proxy tries models in order, falls back on failure</p>
+          </div>
+          <Button onClick={openCreateCombo} size="sm">
+            <Plus className="w-4 h-4 mr-2" /> Add Combo
+          </Button>
+        </div>
+
+        {comboMessage && (
+          <div className="mb-4 px-3 py-2 rounded-md text-sm bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/30">
+            {comboMessage}
+          </div>
+        )}
+
+        {loadingCombos ? (
+          <div className="text-sm text-[var(--muted-foreground)]">Loading combos...</div>
+        ) : combos.length === 0 ? (
+          <div className="text-sm text-[var(--muted-foreground)] border rounded-lg p-6 text-center">
+            No combos configured. Create one to enable model fallback chains.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {combos.map((combo) => (
+              <Card key={combo.name}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="font-semibold text-sm">{combo.name}</h3>
+                        {combo.label && (
+                          <span className="text-xs text-[var(--muted-foreground)]">— {combo.label}</span>
+                        )}
+                        <Badge variant={combo.enabled ? "default" : "secondary"} className="text-xs ml-auto">
+                          {combo.enabled ? "Active" : "Disabled"}
+                        </Badge>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {combo.modelsJson.map((model, idx) => (
+                          <div key={idx} className="flex items-center gap-0.5">
+                            {idx > 0 && <ArrowRight className="w-3 h-3 text-[var(--muted-foreground)]" />}
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-mono bg-[var(--muted)]/40 text-[var(--foreground)] border border-[var(--border)]">
+                              {model}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => openEditCombo(combo)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="w-7 h-7 text-[var(--error)] hover:text-[var(--error)]" onClick={() => handleDeleteCombo(combo.name)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Table */}
       <Card>
         <CardContent className="p-0">
@@ -580,73 +647,6 @@ export default function Models() {
           </div>
         </div>
       )}
-
-      {/* Model Combos — drag-drop reorderable model chains */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold">Model Combos</h2>
-            <p className="text-sm text-[var(--muted-foreground)]">Create named chains — proxy tries models in order, falls back on failure</p>
-          </div>
-          <Button onClick={openCreateCombo} size="sm">
-            <Plus className="w-4 h-4 mr-2" /> Add Combo
-          </Button>
-        </div>
-
-        {comboMessage && (
-          <div className="mb-4 px-3 py-2 rounded-md text-sm bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/30">
-            {comboMessage}
-          </div>
-        )}
-
-        {loadingCombos ? (
-          <div className="text-sm text-[var(--muted-foreground)]">Loading combos...</div>
-        ) : combos.length === 0 ? (
-          <div className="text-sm text-[var(--muted-foreground)] border rounded-lg p-6 text-center">
-            No combos configured. Create one to enable model fallback chains.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {combos.map((combo) => (
-              <Card key={combo.name}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold text-sm">{combo.name}</h3>
-                        {combo.label && (
-                          <span className="text-xs text-[var(--muted-foreground)]">— {combo.label}</span>
-                        )}
-                        <Badge variant={combo.enabled ? "default" : "secondary"} className="text-xs ml-auto">
-                          {combo.enabled ? "Active" : "Disabled"}
-                        </Badge>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1">
-                        {combo.modelsJson.map((model, idx) => (
-                          <div key={idx} className="flex items-center gap-0.5">
-                            {idx > 0 && <ArrowRight className="w-3 h-3 text-[var(--muted-foreground)]" />}
-                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-mono bg-[var(--muted)]/40 text-[var(--foreground)] border border-[var(--border)]">
-                              {model}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => openEditCombo(combo)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="w-7 h-7 text-[var(--error)] hover:text-[var(--error)]" onClick={() => handleDeleteCombo(combo.name)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
 
       {/* Custom Models CRUD Section */}
       <div className="mt-8 border-t border-[var(--border)] pt-8">

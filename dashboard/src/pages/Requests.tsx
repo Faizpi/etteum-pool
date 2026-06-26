@@ -108,18 +108,125 @@ interface FlowViewProps {
 }
 
 function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewProps) {
-  const W = 480, H = 360;
+  const W = 480, H = 450;
   const cx = W / 2, cy = H / 2;
-  const radius = 120;
+  const radius = 170;
+
+  const [viewBox, setViewBox] = useState({ x: 0, y: 0, width: W, height: H });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [draggingNode, setDraggingNode] = useState<string | null>(null);
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
 
   const activeStreamList = Array.from(activeStreams.values());
+
+  // Pan/zoom handlers using viewBox
+  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const svg = e.currentTarget;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
+    
+    const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+    const newWidth = viewBox.width * zoomFactor;
+    const newHeight = viewBox.height * zoomFactor;
+    
+    // Clamp zoom
+    if (newWidth > W * 2 || newWidth < W * 0.5) return;
+    
+    const newX = svgP.x - (svgP.x - viewBox.x) * zoomFactor;
+    const newY = svgP.y - (svgP.y - viewBox.y) * zoomFactor;
+    
+    setViewBox({ x: newX, y: newY, width: newWidth, height: newHeight });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button === 0 && !draggingNode) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (isDragging && !draggingNode) {
+      const dx = (e.clientX - dragStart.x) * (viewBox.width / W);
+      const dy = (e.clientY - dragStart.y) * (viewBox.height / H);
+      
+      setViewBox(prev => ({
+        ...prev,
+        x: prev.x - dx,
+        y: prev.y - dy,
+      }));
+      
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setDraggingNode(null);
+  };
+  
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+    setDraggingNode(null);
+  };
+
+  const handleReset = () => {
+    setViewBox({ x: 0, y: 0, width: W, height: H });
+    setNodePositions({});
+  };
+
+  const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
+    e.stopPropagation();
+    setDraggingNode(nodeId);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleNodeMouseMove = (e: React.MouseEvent, nodeId: string, defaultX: number, defaultY: number) => {
+    if (draggingNode === nodeId) {
+      e.stopPropagation();
+      
+      const dx = (e.clientX - dragStart.x) * (viewBox.width / W);
+      const dy = (e.clientY - dragStart.y) * (viewBox.height / H);
+      
+      setNodePositions(prev => ({
+        ...prev,
+        [nodeId]: {
+          x: (prev[nodeId]?.x ?? defaultX) + dx,
+          y: (prev[nodeId]?.y ?? defaultY) + dy,
+        }
+      }));
+      
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const svgStyle: React.CSSProperties = {
+    display: "block",
+    maxHeight: 500,
+    cursor: isDragging ? "grabbing" : draggingNode ? "grabbing" : "grab",
+  };
 
   // Show providers that have quota (from accounts)
   const quotaProviders = FLOW_PROVIDERS.filter((p) => accountQuotas[p] && accountQuotas[p].total > 0);
 
   const providerPositions = quotaProviders.map((p, i) => {
     const angle = (i / Math.max(quotaProviders.length, 1)) * 2 * Math.PI - Math.PI / 2;
-    return { id: p, x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+    const defaultX = cx + radius * Math.cos(angle);
+    const defaultY = cy + radius * Math.sin(angle);
+    const customPos = nodePositions[p];
+    return { 
+      id: p, 
+      x: customPos?.x ?? defaultX, 
+      y: customPos?.y ?? defaultY,
+      defaultX,
+      defaultY,
+    };
   });
 
   const recentRequests = logs.slice(0, 25);
@@ -161,10 +268,30 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-4 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden p-4" style={{ minHeight: 420 }}>
+    <div className="flex flex-col md:flex-row gap-4 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden p-4" style={{ minHeight: 520 }}>
       {/* Left: Graph */}
-      <div className="relative flex-1 rounded-lg border border-[var(--border)] overflow-hidden" style={{ minHeight: 400, background: "var(--background)" }}>
-        <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", maxHeight: 400 }}>
+      <div className="relative flex-1 rounded-lg border border-[var(--border)] overflow-hidden" style={{ minHeight: 500, background: "var(--background)" }}>
+        {/* Reset button - fixed position, outside SVG transform */}
+        <button
+          onClick={handleReset}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="absolute top-2 right-2 z-50 px-2 py-1 text-xs rounded bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[var(--secondary)]/80 transition-colors pointer-events-auto"
+          style={{ pointerEvents: 'auto' }}
+          title="Reset view"
+        >
+          Reset
+        </button>
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+          style={svgStyle}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        >
           <defs>
             {/* Grid pattern */}
             <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -184,8 +311,8 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
             })}
           </defs>
 
-          {/* Background grid */}
-          <rect width={W} height={H} fill="url(#grid)" />
+          {/* Background grid - extends beyond viewBox */}
+          <rect x={viewBox.x - 500} y={viewBox.y - 500} width={viewBox.width + 1000} height={viewBox.height + 1000} fill="url(#grid)" />
 
           {/* Connection lines - curved */}
           {providerPositions.map((p) => {
@@ -229,11 +356,26 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
             );
           })}
 
-          {/* Center node */}
-          <rect x={cx - 38} y={cy - 20} width={76} height={40} rx={8} fill="var(--card)" stroke="#22c55e" strokeWidth="2" />
-          <text x={cx} y={cy + 5} textAnchor="middle" fill="var(--foreground)" fontSize="14" fontWeight="bold" fontFamily="inherit">
-            etteum
-          </text>
+          {/* Center node - etteum */}
+          <rect x={cx - 60} y={cy - 30} width={120} height={60} rx={10} fill="var(--card)" stroke="#00eb92" strokeWidth="2.5" />
+          <g transform={`translate(${cx}, ${cy})`}>
+            {/* Logo vertically centered between text lines */}
+            <image
+              href="/etteum.svg"
+              x={-40}
+              y={-10}
+              width={20}
+              height={20}
+            />
+            {/* Etteum text vertically centered */}
+            <text x={-14} y={-7} textAnchor="start" fill="var(--foreground)" fontSize="12" fontWeight="bold" fontFamily="inherit" dominantBaseline="middle">
+              Etteum
+            </text>
+            {/* Pool Proxy aligned below Etteum */}
+            <text x={-14} y={7} textAnchor="start" fill="var(--muted-foreground)" fontSize="9" fontFamily="inherit" opacity="0.7" dominantBaseline="middle">
+              Pool Proxy
+            </text>
+          </g>
 
           {/* Provider nodes with logo */}
           {providerPositions.map((p) => {
@@ -241,46 +383,58 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
             const quota = accountQuotas[p.id] || { total: 0, remaining: 0 };
             const color = LOGO_COLORS[p.id] || "#64748b";
             const pct = quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0;
-            const pw = 110, ph = 36;
+            const pw = 160, ph = 52;
             const nodeX = p.x, nodeY = p.y;
             const logoSrc = LOGO_IMAGES[p.id];
+            const logoSize = 28;
+            const logoPad = 8;
+            const nameX = nodeX - pw / 2 + logoPad + logoSize + 6;
             return (
-              <g key={p.id}>
+              <g
+                key={p.id}
+                onMouseDown={(e) => handleNodeMouseDown(e, p.id)}
+                onMouseMove={(e) => handleNodeMouseMove(e, p.id, p.defaultX, p.defaultY)}
+                style={{ cursor: draggingNode === p.id ? "grabbing" : "pointer" }}
+              >
                 {/* Node background */}
                 <rect
                   x={nodeX - pw / 2} y={nodeY - ph / 2}
-                  width={pw} height={ph} rx={6}
+                  width={pw} height={ph} rx={8}
                   fill="var(--background)"
                   stroke={isActive ? color : "var(--border)"}
-                  strokeWidth={isActive ? "1.5" : "1"}
+                  strokeWidth={isActive ? "2" : "1"}
                 />
                 {/* Logo image or fallback circle */}
                 {logoSrc ? (
                   <image
                     href={logoSrc}
-                    x={nodeX - pw / 2 + 4}
-                    y={nodeY - 12}
-                    width={24}
-                    height={24}
+                    x={nodeX - pw / 2 + logoPad}
+                    y={nodeY - logoSize / 2}
+                    width={logoSize}
+                    height={logoSize}
                     opacity={isActive ? 1 : 0.5}
                   />
                 ) : (
                   <>
-                    <circle cx={nodeX - pw / 2 + 16} cy={nodeY} r={10} fill={color} opacity={isActive ? 1 : 0.5} />
-                    <text x={nodeX - pw / 2 + 16} y={nodeY + 4} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
+                    <circle cx={nodeX - pw / 2 + logoPad + logoSize / 2} cy={nodeY} r={logoSize / 2} fill={color} opacity={isActive ? 1 : 0.5} />
+                    <text x={nodeX - pw / 2 + logoPad + logoSize / 2} y={nodeY + 4} textAnchor="middle" fill="#fff" fontSize="9" fontWeight="bold" fontFamily="inherit">
                       {LOGO_LABELS[p.id]}
                     </text>
                   </>
                 )}
                 {/* Provider name */}
-                <text x={nodeX - pw / 2 + 32} y={nodeY + 4} textAnchor="start" fill="var(--foreground)" fontSize="10" fontFamily="inherit" fontWeight="500">
+                <text x={nameX} y={nodeY - 2} textAnchor="start" fill="var(--foreground)" fontSize="10.5" fontFamily="inherit" fontWeight="600">
                   {p.id.length > 12 ? p.id.slice(0, 11) + "…" : p.id}
                 </text>
-                {/* Quota badge */}
+                {/* Subtitle - full word credits */}
+                <text x={nameX} y={nodeY + 12} textAnchor="start" fill="var(--muted-foreground)" fontSize="7.5" fontFamily="inherit" opacity="0.8">
+                  {quota.total > 0 ? `${Math.round(quota.remaining)}/${Math.round(quota.total)} credits` : "No quota"}
+                </text>
+                {/* Quota badge - shifted left */}
                 {quota.total > 0 && (
                   <g>
-                    <rect x={nodeX + pw / 2 - 24} y={nodeY - 8} width={22} height={14} rx={4} fill={pct > 50 ? "#22c55e" : pct > 20 ? "#f59e0b" : "#ef4444"} opacity="0.9" />
-                    <text x={nodeX + pw / 2 - 13} y={nodeY + 2} textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="inherit">
+                    <rect x={nodeX + pw / 2 - 38} y={nodeY - 10} width={28} height={18} rx={5} fill={pct > 50 ? "#22c55e" : pct > 20 ? "#f59e0b" : "#ef4444"} opacity="0.9" />
+                    <text x={nodeX + pw / 2 - 24} y={nodeY + 3} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
                       {pct}%
                     </text>
                   </g>
@@ -298,7 +452,7 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
       </div>
 
       {/* Right: Recent Requests Table */}
-      <div className="md:w-[340px] w-80 rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col shrink-0" style={{ maxHeight: 400 }}>
+      <div className="md:w-[340px] w-80 rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden flex flex-col shrink-0" style={{ maxHeight: 500 }}>
         <div className="px-4 py-2.5 border-b border-[var(--border)] shrink-0">
           <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Recent Requests</h3>
         </div>
