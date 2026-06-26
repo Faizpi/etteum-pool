@@ -110,7 +110,7 @@ interface FlowViewProps {
 function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewProps) {
   const W = 480, H = 360;
   const cx = W / 2, cy = H / 2;
-  const radius = 125;
+  const radius = 120;
 
   const activeStreamList = Array.from(activeStreams.values());
 
@@ -122,16 +122,48 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
     return { id: p, x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
   });
 
-  const recentRequests = logs.slice(0, 20);
+  const recentRequests = logs.slice(0, 25);
 
   const PANEL_WIDTH = 260;
 
+  // Provider logo config
+  const LOGO_COLORS: Record<string, string> = {
+    kiro: "#8b5cf6",
+    "kiro-pro": "#a78bfa",
+    codebuddy: "#f59e0b",
+    canva: "#e84393",
+    codex: "#3b82f6",
+    qoder: "#14b8a6",
+    mimo: "#f97316",
+    alibaba: "#ea580c",
+    antigravity: "#6366f1",
+    byok: "#64748b",
+  };
+
+  const LOGO_LABELS: Record<string, string> = {
+    kiro: "K",
+    "kiro-pro": "KP",
+    codebuddy: "CB",
+    canva: "Ca",
+    codex: "Cx",
+    qoder: "Qd",
+    mimo: "Mm",
+    alibaba: "Ali",
+    antigravity: "Ag",
+    byok: "BY",
+  };
+
   return (
     <div className="flex gap-3 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden" style={{ height: 420 }}>
-      {/* Left: Graph */}
-      <div className="relative flex-1 flex items-center justify-center" style={{ minWidth: 0 }}>
+      {/* Left: Graph with grid */}
+      <div className="relative flex-1 flex items-center justify-center" style={{ minWidth: 0, background: "var(--background)" }}>
         <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", maxHeight: 420 }}>
           <defs>
+            {/* Grid pattern */}
+            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--border)" strokeWidth="0.3" opacity="0.3" />
+            </pattern>
+            {/* Glow for active streams */}
             {activeStreamList.map((stream) => {
               const target = providerPositions.find((p) => p.id === stream.provider);
               if (!target) return null;
@@ -145,16 +177,25 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
             })}
           </defs>
 
-          {/* Connection lines */}
+          {/* Background grid */}
+          <rect width={W} height={H} fill="url(#grid)" />
+
+          {/* Connection lines - curved */}
           {providerPositions.map((p) => {
             const isActive = activeStreamList.some((s) => s.provider === p.id);
+            const mx = (cx + p.x) / 2;
+            const my = (cy + p.y) / 2;
+            const offset = 15;
+            const cpx = mx + (p.y - cy) * 0.15;
+            const cpy = my - (p.x - cx) * 0.15;
             return (
-              <line
+              <path
                 key={p.id}
-                x1={cx} y1={cy} x2={p.x} y2={p.y}
+                d={`M ${cx} ${cy} Q ${cpx} ${cpy} ${p.x} ${p.y}`}
+                fill="none"
                 stroke={isActive ? (PROVIDER_HEX[p.id] || "var(--primary)") : "var(--border)"}
-                strokeWidth="0.5"
-                opacity={isActive ? 0.25 : 0.08}
+                strokeWidth={isActive ? "1.2" : "0.5"}
+                opacity={isActive ? 0.5 : 0.15}
               />
             );
           })}
@@ -163,54 +204,63 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
           {activeStreamList.map((stream) => {
             const target = providerPositions.find((p) => p.id === stream.provider);
             if (!target) return null;
-            const pathD = `M ${cx} ${cy} L ${target.x} ${target.y}`;
+            const mx = (cx + target.x) / 2;
+            const my = (cy + target.y) / 2;
+            const cpx = mx + (target.y - cy) * 0.15;
+            const cpy = my - (target.x - cx) * 0.15;
+            const pathD = `M ${cx} ${cy} Q ${cpx} ${cpy} ${target.x} ${target.y}`;
             const color = PROVIDER_HEX[stream.provider] || "#fff";
             return (
               <g key={stream.startedAt}>
                 <circle r="6" fill={color} opacity="0.1">
                   <animateMotion dur="1.2s" repeatCount="indefinite" path={pathD} />
                 </circle>
-                <circle r="2.5" fill={color} opacity="0.85">
+                <circle r="2.5" fill={color} opacity="0.9">
                   <animateMotion dur="1.2s" repeatCount="indefinite" path={pathD} />
                 </circle>
               </g>
             );
           })}
 
-          {/* Center node - big green circle like reference */}
-          <circle cx={cx} cy={cy} r={42} fill="#162320" stroke="#22c55e" strokeWidth="2" />
-          <text x={cx} y={cy - 4} textAnchor="middle" fill="#e2e8f0" fontSize="15" fontWeight="bold" fontFamily="inherit">
+          {/* Center node */}
+          <rect x={cx - 38} y={cy - 20} width={76} height={40} rx={8} fill="#1a1a2e" stroke="#22c55e" strokeWidth="2" />
+          <text x={cx} y={cy + 5} textAnchor="middle" fill="#e2e8f0" fontSize="14" fontWeight="bold" fontFamily="inherit">
             etteum
           </text>
-          <text x={cx} y={cy + 14} textAnchor="middle" fill="#94a3b8" fontSize="10" fontFamily="inherit">
-            pool
-          </text>
 
-          {/* Provider nodes */}
+          {/* Provider nodes with logo */}
           {providerPositions.map((p) => {
             const isActive = activeStreamList.some((s) => s.provider === p.id);
             const quota = accountQuotas[p.id] || { total: 0, remaining: 0 };
-            const color = PROVIDER_HEX[p.id] || "var(--primary)";
+            const color = LOGO_COLORS[p.id] || "#64748b";
+            const label = LOGO_LABELS[p.id] || p.id.slice(0, 2).toUpperCase();
             const pct = quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0;
+            const pw = 120, ph = 36;
+            const nodeX = p.x, nodeY = p.y;
             return (
               <g key={p.id}>
-                <circle
-                  cx={p.x} cy={p.y} r={22}
+                {/* Node background */}
+                <rect
+                  x={nodeX - pw / 2} y={nodeY - ph / 2}
+                  width={pw} height={ph} rx={6}
                   fill="var(--background)"
-                  stroke="var(--border)"
-                  strokeWidth="1"
+                  stroke={isActive ? color : "var(--border)"}
+                  strokeWidth={isActive ? "1.5" : "1"}
                 />
-                {/* Colored dot in center of node */}
-                <circle cx={p.x} cy={p.y} r={4} fill={color} opacity="0.8" />
-                {/* Label below node */}
-                <text x={p.x} y={p.y + 14} textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="inherit">
+                {/* Logo circle */}
+                <circle cx={nodeX - pw / 2 + 18} cy={nodeY} r={10} fill={color} opacity={isActive ? 1 : 0.5} />
+                <text x={nodeX - pw / 2 + 18} y={nodeY + 4} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" fontFamily="inherit">
+                  {label}
+                </text>
+                {/* Provider name */}
+                <text x={nodeX + 5} y={nodeY + 4} textAnchor="start" fill="var(--foreground)" fontSize="10" fontFamily="inherit" fontWeight="500">
                   {p.id.length > 12 ? p.id.slice(0, 11) + "…" : p.id}
                 </text>
                 {/* Quota badge */}
                 {quota.total > 0 && (
                   <g>
-                    <rect x={p.x + 14} y={p.y - 20} width={22} height={14} rx={4} fill={pct > 50 ? "#22c55e" : pct > 20 ? "#f59e0b" : "#ef4444"} opacity="0.9" />
-                    <text x={p.x + 25} y={p.y - 10.5} textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="inherit">
+                    <rect x={nodeX + pw / 2 - 24} y={nodeY - 8} width={22} height={14} rx={4} fill={pct > 50 ? "#22c55e" : pct > 20 ? "#f59e0b" : "#ef4444"} opacity="0.9" />
+                    <text x={nodeX + pw / 2 - 13} y={nodeY + 2} textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="inherit">
                       {pct}%
                     </text>
                   </g>
@@ -229,15 +279,20 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
 
       {/* Right: Recent Requests Panel */}
       <div className="flex flex-col border-l border-[var(--border)] bg-[var(--card)]" style={{ width: PANEL_WIDTH, flexShrink: 0 }}>
-        <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Recent</h3>
-          <span className="text-[10px] text-[var(--muted-foreground)]">{logs.length} total</span>
+        <div className="px-3 py-2.5 border-b border-[var(--border)]">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Recent Requests</h3>
+        </div>
+        {/* Table header */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border)]/60 bg-[var(--background)]/50">
+          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase flex-1">Model</span>
+          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase w-20 text-right">In / Out</span>
+          <span className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase w-10 text-right">When</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           {recentRequests.map((req) => {
             const elapsed = Date.now() - new Date(req.createdAt).getTime();
             const timeAgo = elapsed < 60000 ? "just now"
-              : elapsed < 3600000 ? `${Math.floor(elapsed / 60000)}m`
+              : elapsed < 3600000 ? `${Math.floor(elapsed / 60000)}m ago`
               : `${Math.floor(elapsed / 3600000)}h ago`;
             return (
               <div
@@ -252,14 +307,14 @@ function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewPr
                 <span className="text-[11px] text-[var(--foreground)] truncate flex-1 font-mono" title={req.model || ""}>
                   {req.model || "-"}
                 </span>
-                <span className="text-[10px] font-mono flex-shrink-0 text-right" style={{ color: "var(--warning)" }}>
+                <span className="text-[10px] font-mono flex-shrink-0 w-20 text-right" style={{ color: "var(--warning)" }}>
                   {req.promptTokens ? (req.promptTokens >= 1000 ? `${(req.promptTokens / 1000).toFixed(1)}k` : req.promptTokens) : 0}
                 </span>
-                <span className="text-[9px] text-[var(--muted-foreground)] flex-shrink-0">↑↓</span>
-                <span className="text-[10px] font-mono flex-shrink-0 text-right" style={{ color: "var(--success)" }}>
+                <span className="text-[9px] text-[var(--muted-foreground)] flex-shrink-0 text-center w-5">↑↓</span>
+                <span className="text-[10px] font-mono flex-shrink-0 text-right w-12" style={{ color: "var(--success)" }}>
                   {req.completionTokens ? (req.completionTokens >= 1000 ? `${(req.completionTokens / 1000).toFixed(1)}k` : req.completionTokens) : 0}
                 </span>
-                <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0 w-8 text-right">{timeAgo}</span>
+                <span className="text-[10px] text-[var(--muted-foreground)] flex-shrink-0 w-12 text-right">{timeAgo}</span>
               </div>
             );
           })}
