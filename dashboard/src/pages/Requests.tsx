@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fetchRequests, fetchRequestDetail } from "@/lib/api";
+import { fetchRequests, fetchRequestDetail, fetchAccounts } from "@/lib/api";
 import { formatDateTimeID } from "@/lib/utils";
 import { useWsEvent } from "@/hooks/useWebSocket";
 
@@ -104,26 +104,21 @@ interface FlowViewProps {
   activeStreams: Map<number, ActiveStream>;
   logs: RequestLog[];
   openDetail: (req: RequestLog) => void;
+  accountQuotas: Record<string, { total: number; remaining: number }>;
 }
 
-function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
+function FlowView({ activeStreams, logs, openDetail, accountQuotas }: FlowViewProps) {
   const W = 480, H = 360;
   const cx = W / 2, cy = H / 2;
   const radius = 125;
 
   const activeStreamList = Array.from(activeStreams.values());
 
-  const providerCredits = logs.reduce<Record<string, number>>((acc, l) => {
-    const credit = (l.creditsUsed ?? 0);
-    if (credit > 0) acc[l.provider] = (acc[l.provider] || 0) + credit;
-    return acc;
-  }, {});
+  // Show providers that have quota (from accounts)
+  const quotaProviders = FLOW_PROVIDERS.filter((p) => accountQuotas[p] && accountQuotas[p].total > 0);
 
-  // Show providers that have credit usage
-  const creditProviders = FLOW_PROVIDERS.filter((p) => providerCredits[p] && providerCredits[p] > 0);
-
-  const providerPositions = creditProviders.map((p, i) => {
-    const angle = (i / Math.max(creditProviders.length, 1)) * 2 * Math.PI - Math.PI / 2;
+  const providerPositions = quotaProviders.map((p, i) => {
+    const angle = (i / Math.max(quotaProviders.length, 1)) * 2 * Math.PI - Math.PI / 2;
     return { id: p, x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
   });
 
@@ -194,8 +189,9 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
           {/* Provider nodes */}
           {providerPositions.map((p) => {
             const isActive = activeStreamList.some((s) => s.provider === p.id);
-            const credit = providerCredits[p.id] || 0;
+            const quota = accountQuotas[p.id] || { total: 0, remaining: 0 };
             const color = PROVIDER_HEX[p.id] || "var(--primary)";
+            const pct = quota.total > 0 ? Math.round((quota.remaining / quota.total) * 100) : 0;
             return (
               <g key={p.id}>
                 <circle
@@ -210,12 +206,12 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
                 <text x={p.x} y={p.y + 14} textAnchor="middle" fill="var(--muted-foreground)" fontSize="9" fontFamily="inherit">
                   {p.id.length > 12 ? p.id.slice(0, 11) + "…" : p.id}
                 </text>
-                {/* Credit badge */}
-                {credit > 0 && (
+                {/* Quota badge */}
+                {quota.total > 0 && (
                   <g>
-                    <rect x={p.x + 14} y={p.y - 20} width={22} height={14} rx={4} fill={color} opacity="0.85" />
-                    <text x={p.x + 25} y={p.y - 10.5} textAnchor="middle" fill="#fff" fontSize="7.5" fontWeight="bold" fontFamily="inherit">
-                      {credit > 999 ? `${(credit / 1000).toFixed(1)}k` : credit}
+                    <rect x={p.x + 14} y={p.y - 20} width={22} height={14} rx={4} fill={pct > 50 ? "#22c55e" : pct > 20 ? "#f59e0b" : "#ef4444"} opacity="0.9" />
+                    <text x={p.x + 25} y={p.y - 10.5} textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="inherit">
+                      {pct}%
                     </text>
                   </g>
                 )}
@@ -224,9 +220,9 @@ function FlowView({ activeStreams, logs, openDetail }: FlowViewProps) {
           })}
         </svg>
 
-        {creditProviders.length === 0 && (
+        {quotaProviders.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--muted-foreground)]">
-            No credit usage yet
+            No accounts with quota
           </div>
         )}
       </div>
@@ -296,6 +292,23 @@ export default function Requests() {
   const perPage = 25;
   const [activeStreams, setActiveStreams] = useState<Map<number, ActiveStream>>(new Map());
   const [now, setNow] = useState<number>(Date.now());
+  const [accountQuotas, setAccountQuotas] = useState<Record<string, { total: number; remaining: number }>>({});
+
+  async function loadQuotas() {
+    try {
+      const accounts = (await fetchAccounts()) as { id: number; provider: string; quotaLimit?: number; quotaRemaining?: number }[];
+      const quotas: Record<string, { total: number; remaining: number }> = {};
+      for (const a of accounts) {
+        const p = a.provider;
+        quotas[p] = quotas[p] || { total: 0, remaining: 0 };
+        quotas[p].total += a.quotaLimit || 0;
+        quotas[p].remaining += a.quotaRemaining || 0;
+      }
+      setAccountQuotas(quotas);
+    } catch {}
+  }
+
+  useEffect(() => { loadQuotas(); }, []);
 
   /**
    * Open the detail drawer for a row. The list endpoint omits the heavy
@@ -496,7 +509,7 @@ export default function Requests() {
       )}
 
       {viewMode === "flow" && (
-        <FlowView activeStreams={activeStreams} logs={logs} openDetail={openDetail} />
+        <FlowView activeStreams={activeStreams} logs={logs} openDetail={openDetail} accountQuotas={accountQuotas} />
       )}
 
       {viewMode === "table" && (
