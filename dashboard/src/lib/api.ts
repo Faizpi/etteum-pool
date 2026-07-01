@@ -151,6 +151,14 @@ export async function fetchModelUsage(hours?: number | null, range?: string) {
   return fetchApi(`/api/stats/models${qs ? `?${qs}` : ""}`);
 }
 
+export async function fetchComboUsage(hours?: number | null, range?: string) {
+  const params = new URLSearchParams();
+  if (hours !== null && hours !== undefined) params.set("hours", String(hours));
+  if (range) params.set("range", range);
+  const qs = params.toString();
+  return fetchApi(`/api/stats/combo-usage${qs ? `?${qs}` : ""}`);
+}
+
 export async function refreshAccountQuota(accountId: number) {
   return fetchApi(`/api/accounts/${accountId}/refresh-quota`, {
     method: "POST",

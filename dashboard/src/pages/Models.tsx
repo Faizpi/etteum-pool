@@ -9,10 +9,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Cpu, Copy, Check, Search, Plus, Pencil, Trash2, GripVertical, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { Cpu, Copy, Check, Search, Plus, Pencil, Trash2, GripVertical, ArrowRight, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
-import { fetchModels, fetchIntegration, saveIntegration, type ModelMappingDTO, fetchCombos, createCombo, updateCombo, deleteCombo, type ModelComboDTO, fetchCustomModels, createCustomModel, updateCustomModel, deleteCustomModel, type CustomModelDTO } from "@/lib/api";
+import { fetchModels, fetchIntegration, saveIntegration, type ModelMappingDTO, fetchCombos, createCombo, updateCombo, deleteCombo, type ModelComboDTO, fetchCustomModels, createCustomModel, updateCustomModel, deleteCustomModel, type CustomModelDTO, fetchComboUsage } from "@/lib/api";
 import { useTimedMessage } from "@/hooks/useTimedMessage";
+import { modelColor } from "@/lib/utils";
 
 interface ModelData {
   id: string;
@@ -90,6 +91,11 @@ export default function Models() {
   const { message: comboMessage, setMessage: setComboMessage } = useTimedMessage<string>(null, 2000);
   const [showComboPicker, setShowComboPicker] = useState(false);
   const comboPickerRef = useRef<HTMLDivElement>(null);
+
+  // Combo stats state
+  const [expandedComboStats, setExpandedComboStats] = useState<Record<string, boolean>>({});
+  const [comboUsageData, setComboUsageData] = useState<Record<string, any>>({});
+  const [loadingComboStats, setLoadingComboStats] = useState<Record<string, boolean>>({});
 
   // Pagination state — must be here (before derived values) to satisfy React Hook Rules
   const [page, setPage] = useState(1);
@@ -282,6 +288,27 @@ export default function Models() {
     const [item] = updated.splice(fromIdx, 1);
     updated.splice(toIdx, 0, item);
     setComboModels(updated);
+  };
+
+  const handleToggleComboStats = async (comboName: string) => {
+    const isExpanded = expandedComboStats[comboName];
+    
+    // Toggle expansion state
+    setExpandedComboStats(prev => ({ ...prev, [comboName]: !isExpanded }));
+    
+    // If expanding and data not yet loaded, fetch it
+    if (!isExpanded && !comboUsageData[comboName]) {
+      setLoadingComboStats(prev => ({ ...prev, [comboName]: true }));
+      try {
+        const data = await fetchComboUsage(168, "7d"); // Last 7 days (168 hours)
+        setComboUsageData(prev => ({ ...prev, [comboName]: data }));
+      } catch (err) {
+        console.error("Failed to fetch combo usage:", err);
+        setComboUsageData(prev => ({ ...prev, [comboName]: null }));
+      } finally {
+        setLoadingComboStats(prev => ({ ...prev, [comboName]: false }));
+      }
+    }
   };
 
   const loadMappings = async () => {
@@ -508,6 +535,83 @@ export default function Models() {
                       </Button>
                     </div>
                   </div>
+
+                  {/* Usage Stats Panel - Only for enabled combos */}
+                  {combo.enabled && (
+                    <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                      <button
+                        onClick={() => handleToggleComboStats(combo.name)}
+                        className="flex items-center gap-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors w-full"
+                      >
+                        {expandedComboStats[combo.name] ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                        <span>Usage Stats (Last 7 Days)</span>
+                      </button>
+
+                      {expandedComboStats[combo.name] && (
+                        <div className="mt-3 space-y-3">
+                          {loadingComboStats[combo.name] ? (
+                            <div className="text-sm text-[var(--muted-foreground)]">Loading stats...</div>
+                          ) : comboUsageData[combo.name] === null ? (
+                            <div className="text-sm text-[var(--muted-foreground)]">Failed to load stats</div>
+                          ) : !comboUsageData[combo.name] || !comboUsageData[combo.name].combos ? (
+                            <div className="text-sm text-[var(--muted-foreground)]">No usage data yet</div>
+                          ) : (() => {
+                            const comboStats = comboUsageData[combo.name].combos.find((c: any) => c.combo === combo.name);
+                            if (!comboStats || !comboStats.models || comboStats.models.length === 0) {
+                              return <div className="text-sm text-[var(--muted-foreground)]">No usage data yet</div>;
+                            }
+
+                            const totalRequests = comboStats.totalRequests || 0;
+                            const successRate = comboStats.successRate || 0;
+                            const maxRequests = Math.max(...comboStats.models.map((m: any) => m.requests || 0));
+
+                            return (
+                              <>
+                                {/* Summary Stats */}
+                                <div className="flex items-center gap-4 text-sm">
+                                  <div>
+                                    <span className="text-[var(--muted-foreground)]">Total Requests: </span>
+                                    <span className="text-[var(--foreground)] font-medium">{totalRequests}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[var(--muted-foreground)]">Success Rate: </span>
+                                    <span className="text-[var(--foreground)] font-medium">{successRate.toFixed(1)}%</span>
+                                  </div>
+                                </div>
+
+                                {/* Per-Model Breakdown */}
+                                <div className="space-y-3">
+                                  {comboStats.models.map((modelStat: any, idx: number) => (
+                                    <div key={`${modelStat.model}-${idx}`} className="space-y-1">
+                                      <div className="flex items-center justify-between gap-3 text-sm">
+                                        <span className="text-[var(--foreground)] font-mono">{modelStat.model}</span>
+                                        <span className="shrink-0 text-[var(--muted-foreground)]">
+                                          {modelStat.requests || 0} req
+                                        </span>
+                                      </div>
+                                      <div className="h-2 rounded-full bg-[var(--secondary)] overflow-hidden">
+                                        <div
+                                          className="h-full rounded-full transition-all"
+                                          style={{
+                                            width: `${maxRequests > 0 ? ((modelStat.requests || 0) / maxRequests) * 100 : 0}%`,
+                                            backgroundColor: modelColor(modelStat.model, idx),
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

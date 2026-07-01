@@ -40,6 +40,7 @@ function ensureTablesExist() {
       account_id integer REFERENCES accounts(id),
       provider text NOT NULL,
       model text,
+      combo_name text,
       prompt_tokens integer DEFAULT 0,
       completion_tokens integer DEFAULT 0,
       total_tokens integer DEFAULT 0,
@@ -60,6 +61,7 @@ function ensureTablesExist() {
     `CREATE INDEX IF NOT EXISTS request_logs_provider_created_at_idx ON request_logs (provider, created_at)`,
     `CREATE INDEX IF NOT EXISTS request_logs_provider_model_status_idx ON request_logs (provider, model, status)`,
     `CREATE INDEX IF NOT EXISTS request_logs_account_idx ON request_logs (account_id)`,
+    `CREATE INDEX IF NOT EXISTS request_logs_combo_idx ON request_logs (combo_name, created_at)`,
 
     // ── settings ──
     `CREATE TABLE IF NOT EXISTS settings (
@@ -74,6 +76,7 @@ function ensureTablesExist() {
       bucket text NOT NULL,
       provider text NOT NULL,
       model text NOT NULL,
+      combo_name text,
       total_requests integer DEFAULT 0,
       success_requests integer DEFAULT 0,
       error_requests integer DEFAULT 0,
@@ -83,9 +86,10 @@ function ensureTablesExist() {
       credits_used real DEFAULT 0,
       total_duration_ms integer DEFAULT 0
     )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS usage_summary_bucket_provider_model_idx ON usage_summary (bucket, provider, model)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS usage_summary_bucket_provider_model_combo_idx ON usage_summary (bucket, provider, model, combo_name)`,
     `CREATE INDEX IF NOT EXISTS usage_summary_bucket_idx ON usage_summary (bucket)`,
     `CREATE INDEX IF NOT EXISTS usage_summary_provider_idx ON usage_summary (provider, bucket)`,
+    `CREATE INDEX IF NOT EXISTS usage_summary_combo_idx ON usage_summary (combo_name, bucket)`,
 
     // ── vcc_cards ──
     `CREATE TABLE IF NOT EXISTS vcc_cards (
@@ -248,7 +252,21 @@ const IDEMPOTENT_COLUMNS: Array<{ table: string; column: string; ddl: string }> 
   { table: "vcc_cards", column: "bin", ddl: "ALTER TABLE vcc_cards ADD COLUMN bin TEXT" },
   // 2026-06-21 — card_bin (BIN recorded on transaction for history tracking)
   { table: "vcc_transactions", column: "card_bin", ddl: "ALTER TABLE vcc_transactions ADD COLUMN card_bin TEXT" },
+  // 2026-06-29 — combo_name (track original combo name for combo usage stats)
+  { table: "request_logs", column: "combo_name", ddl: "ALTER TABLE request_logs ADD COLUMN combo_name TEXT" },
+  { table: "usage_summary", column: "combo_name", ddl: "ALTER TABLE usage_summary ADD COLUMN combo_name TEXT" },
 ];
+
+/**
+ * Drop legacy unique indexes that predate the combo_name column.
+ * The old 3-column index conflicts with new inserts that include combo_name.
+ * Safe to run — DROP INDEX IF EXISTS is idempotent.
+ */
+function dropLegacyIndexes() {
+  try {
+    client.exec("DROP INDEX IF EXISTS usage_summary_bucket_provider_model_idx");
+  } catch { /* already gone or never existed */ }
+}
 
 function tableHasColumn(table: string, column: string): boolean {
   try {
@@ -374,13 +392,11 @@ async function migrateModelPrefixes() {
       const oldModel = row.model;
       // Skip combo names
       if (comboNames.has(oldModel)) {
-        console.log(`[Migration] Skipping combo name in request_logs: ${oldModel}`);
         continue;
       }
       const newModel = getPrefixedModelName(oldModel);
       if (newModel && newModel !== oldModel) {
         client.prepare("UPDATE request_logs SET model = ? WHERE model = ?").run(newModel, oldModel);
-        console.log(`[Migration] Migrated request_logs model ${oldModel} -> ${newModel}`);
       }
     }
 
@@ -395,7 +411,7 @@ async function migrateModelPrefixes() {
         client.prepare("UPDATE request_logs SET model = ? WHERE model = ?").run(cleanName, comboName);
         client.prepare("UPDATE usage_summary SET model = ? WHERE model = ?").run(cleanName, comboName);
         client.prepare("UPDATE model_mappings SET target_model = ? WHERE target_model = ?").run(cleanName, comboName);
-        console.log(`[Migration] Fixed incorrectly prefixed combo name: ${comboName} -> ${cleanName}`);
+        console.log(`[Migration] Fixed combo name prefix: ${comboName} -> ${cleanName}`);
       }
     }
 
@@ -404,7 +420,6 @@ async function migrateModelPrefixes() {
       const oldModel = row.model;
       // Skip combo names
       if (comboNames.has(oldModel)) {
-        console.log(`[Migration] Skipping combo name in usage_summary: ${oldModel}`);
         continue;
       }
       const newModel = getPrefixedModelName(oldModel);
@@ -413,12 +428,9 @@ async function migrateModelPrefixes() {
         try {
           const existing = client.prepare("SELECT COUNT(*) as cnt FROM usage_summary WHERE model = ?").get(newModel) as { cnt: number };
           if (existing.cnt > 0) {
-            // Already has this model name, skip to avoid UNIQUE conflict
-            console.log(`[Migration] Skipping usage_summary model ${oldModel} -> ${newModel} (already exists)`);
             continue;
           }
           client.prepare("UPDATE usage_summary SET model = ? WHERE model = ?").run(newModel, oldModel);
-          console.log(`[Migration] Migrated usage_summary model ${oldModel} -> ${newModel}`);
         } catch (e: any) {
           console.warn(`[Migration] Skipping usage_summary ${oldModel}: ${e.message}`);
         }
@@ -461,6 +473,9 @@ export async function runMigrations() {
 
   // Always run idempotent column-add migrations (works on fresh deploys without drizzle/).
   await runIdempotentColumns();
+
+  // Drop legacy unique indexes that predate combo_name column.
+  dropLegacyIndexes();
 
   // Run the model prefix migration for previous models
   await migrateModelPrefixes();

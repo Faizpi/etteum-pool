@@ -736,7 +736,7 @@ export class QoderProvider extends BaseProvider {
     object: "model" as const,
     created: Date.now(),
     owned_by: "qoder",
-    context_window: m.max_input_tokens,
+    context_window: 1000000, // overridden from m.max_input_tokens — Qoder upstream accepts up to 1M (verified via stress test)
     max_output: 64000,
     thinking: m.is_reasoning,
     vision: m.is_vl,

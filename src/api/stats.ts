@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db } from "../db/index";
-import { requestLogs, accounts, usageSummary } from "../db/schema";
+import { requestLogs, accounts, usageSummary, modelCombos } from "../db/schema";
 import { desc, sql, eq } from "drizzle-orm";
 import { pool } from "../proxy/pool";
 import { config } from "../config";
@@ -290,4 +290,87 @@ statsRouter.get("/models", async (c) => {
   });
 
   return c.json({ data });
+});
+
+/**
+ * GET /api/stats/combo-usage - Get per-combo usage breakdown
+ * Returns stats for each combo showing which models in the chain were actually used
+ * Supports optional ?hours=N&range=all to filter by time period
+ */
+statsRouter.get("/combo-usage", async (c) => {
+  const range = c.req.query("range");
+  const hours = c.req.query("hours") ? clampNumber(c.req.query("hours"), 168, 1, 24 * 365) : null;
+  const isAll = range === "all";
+
+  const whereExpr = (!isAll && hours)
+    ? sql`${usageSummary.bucket} >= ${new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()}`
+    : sql`1=1`;
+
+  // Get all combos from the database
+  const combos = await db.select().from(modelCombos);
+  const comboMap = new Map(combos.map(c => [c.name, c]));
+
+  // Get usage stats grouped by combo and model
+  const comboStats = await db
+    .select({
+      comboName: usageSummary.comboName,
+      model: usageSummary.model,
+      provider: usageSummary.provider,
+      totalRequests: sql<number>`SUM(total_requests)`,
+      successRequests: sql<number>`SUM(success_requests)`,
+      errorRequests: sql<number>`SUM(error_requests)`,
+      totalTokens: sql<number>`COALESCE(SUM(total_tokens), 0)`,
+      promptTokens: sql<number>`COALESCE(SUM(prompt_tokens), 0)`,
+      completionTokens: sql<number>`COALESCE(SUM(completion_tokens), 0)`,
+      creditsUsed: sql<number>`COALESCE(SUM(credits_used), 0)`,
+    })
+    .from(usageSummary)
+    .where(sql`${whereExpr} AND ${usageSummary.comboName} IS NOT NULL`)
+    .groupBy(usageSummary.comboName, usageSummary.model, usageSummary.provider);
+
+  // Group by combo name
+  const byCombo = new Map<string, any>();
+  for (const row of comboStats) {
+    if (!row.comboName) continue;
+    
+    if (!byCombo.has(row.comboName)) {
+      const combo = comboMap.get(row.comboName);
+      byCombo.set(row.comboName, {
+        combo: row.comboName,
+        comboName: row.comboName,
+        comboLabel: combo?.label || row.comboName,
+        enabled: combo?.enabled || false,
+        totalRequests: 0,
+        successRequests: 0,
+        errorRequests: 0,
+        successRate: 0,
+        models: [],
+      });
+    }
+
+    const comboData = byCombo.get(row.comboName)!;
+    comboData.totalRequests += row.totalRequests;
+    comboData.successRequests += row.successRequests;
+    comboData.errorRequests += row.errorRequests;
+    // Recalculate success rate after adding new data
+    comboData.successRate = comboData.totalRequests > 0
+      ? (comboData.successRequests / comboData.totalRequests) * 100
+      : 0;
+    comboData.models.push({
+      model: row.model,
+      provider: row.provider,
+      requests: row.totalRequests,
+      successRequests: row.successRequests,
+      errorRequests: row.errorRequests,
+      tokens: row.totalTokens,
+      promptTokens: row.promptTokens,
+      completionTokens: row.completionTokens,
+      credits: row.creditsUsed,
+    });
+  }
+
+  const data = Array.from(byCombo.values())
+    .sort((a, b) => b.totalRequests - a.totalRequests);
+
+  return c.json({ combos: data, hours: isAll ? null : hours, range: isAll ? "all" : `${hours}h` });
 });

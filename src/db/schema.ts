@@ -27,6 +27,7 @@ export const requestLogs = sqliteTable("request_logs", {
   accountId: integer("account_id").references(() => accounts.id),
   provider: text("provider").notNull(),
   model: text("model"),
+  comboName: text("combo_name"), // Original combo name if request used a combo (e.g., "bahlil")
   promptTokens: integer("prompt_tokens").default(0),
   completionTokens: integer("completion_tokens").default(0),
   totalTokens: integer("total_tokens").default(0),
@@ -48,6 +49,7 @@ export const requestLogs = sqliteTable("request_logs", {
   index("request_logs_provider_created_at_idx").on(table.provider, table.createdAt),
   index("request_logs_provider_model_status_idx").on(table.provider, table.model, table.status),
   index("request_logs_account_idx").on(table.accountId),
+  index("request_logs_combo_idx").on(table.comboName, table.createdAt),
 ]);
 
 export const settings = sqliteTable("settings", {
@@ -64,6 +66,7 @@ export const usageSummary = sqliteTable("usage_summary", {
   bucket: text("bucket").notNull(), // start of hour (UTC), ISO-8601 string
   provider: text("provider").notNull(),
   model: text("model").notNull(),
+  comboName: text("combo_name"), // Original combo name if request used a combo
   totalRequests: integer("total_requests").default(0),
   successRequests: integer("success_requests").default(0),
   errorRequests: integer("error_requests").default(0),
@@ -73,9 +76,10 @@ export const usageSummary = sqliteTable("usage_summary", {
   creditsUsed: real("credits_used").default(0),
   totalDurationMs: integer("total_duration_ms", { mode: "number" }).default(0),
 }, (table) => [
-  uniqueIndex("usage_summary_bucket_provider_model_idx").on(table.bucket, table.provider, table.model),
+  uniqueIndex("usage_summary_bucket_provider_model_combo_idx").on(table.bucket, table.provider, table.model, table.comboName),
   index("usage_summary_bucket_idx").on(table.bucket),
   index("usage_summary_provider_idx").on(table.provider, table.bucket),
+  index("usage_summary_combo_idx").on(table.comboName, table.bucket),
 ]);
 
 export const vccCards = sqliteTable("vcc_cards", {

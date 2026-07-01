@@ -78,7 +78,7 @@ export function invalidateComboCache() {
 
 /**
  * Resolve a model name to either the same model (no combo) or a chain of models (combo).
- * With round-robin rotation and context-aware filtering.
+ * Always tries models in order (cascade fallback) — no round-robin rotation.
  */
 export async function resolveModelChain(modelName: string, requiredContext: number = 0): Promise<string[]> {
   const combos = await loadComboCache();
@@ -93,24 +93,8 @@ export async function resolveModelChain(modelName: string, requiredContext: numb
   // If all filtered out, fallback to full chain
   if (filtered.length === 0) return chain;
 
-  // 2. Round-robin: get last used index and rotate
-  try {
-    const row = await db.select({ lastUsedIndex: modelCombos.lastUsedIndex }).from(modelCombos).where(eq(modelCombos.name, modelName)).get();
-    const lastIndex = row?.lastUsedIndex ?? 0;
-
-    // Rotate: start from next index
-    const startIndex = (lastIndex + 1) % filtered.length;
-    const rotated = [...filtered.slice(startIndex), ...filtered.slice(0, startIndex)];
-
-    // Update last_used_index for next request
-    const nextIndex = (lastIndex + 1) % filtered.length;
-    await db.update(modelCombos).set({ lastUsedIndex: nextIndex, updatedAt: new Date() }).where(eq(modelCombos.name, modelName));
-
-    return rotated;
-  } catch {
-    // If DB update fails, just return filtered chain
-    return filtered;
-  }
+  // Return chain in original order (no rotation)
+  return filtered;
 }
 
 export interface RouteResult {
@@ -119,6 +103,8 @@ export interface RouteResult {
   provider: ProviderName;
   durationMs: number;
   compressionStats?: CompressionStats;
+  comboName?: string; // Original combo name if request used a combo
+  resolvedModel?: string; // Actual model that was successfully used (differs from request model when combo)
 }
 
 /** Check if a request contains image content blocks */
@@ -219,10 +205,17 @@ function estimateMessagesTokens(messages: ChatCompletionRequest["messages"]): nu
   // Apply content filters to strip the assistant identity, billing headers, etc.
   const sanitizedRequest = sanitizeRequest(request);
 
+  // Store original model name to track if it was a combo
+  const originalModelName = sanitizedRequest.model;
+
   // Resolve model chain — if the model is a combo name, get the ordered list of fallback models
   // Pass estimated prompt tokens for context-aware filtering
   const estimatedTokens = estimateMessagesTokens(sanitizedRequest.messages);
   const modelChain = await resolveModelChain(sanitizedRequest.model, estimatedTokens);
+
+  // If modelChain has more than 1 item OR doesn't equal original, it was a combo
+  const isCombo = modelChain.length > 1 || modelChain[0] !== originalModelName;
+  const comboName = isCombo ? originalModelName : undefined;
 
   const hasImages = requestHasImages(sanitizedRequest);
 
@@ -313,7 +306,7 @@ function estimateMessagesTokens(messages: ChatCompletionRequest["messages"]): nu
           result.response.model = currentModel;
         }
 
-        return { result, account, provider: providerName, durationMs, compressionStats };
+        return { result, account, provider: providerName, durationMs, compressionStats, comboName, resolvedModel: currentModel };
       }
 
       pool.trackRequestEnd(account.id);
