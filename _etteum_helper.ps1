@@ -47,8 +47,17 @@ switch ($Action) {
         if ($Watch -eq 1) { Write-Host 'Starting Etteum in DEV MODE (hot-reload)...' -ForegroundColor Yellow }
         else { Write-Host 'Starting Etteum...' }
 
-        $bun = (Get-Command bun -EA 0).Source
-        if (!$bun) { $bun = "$env:USERPROFILE\.bun\bin\bun.exe" }
+        # Prioritize actual bun.exe over wrapper scripts (Get-Command may return .ps1/.cmd)
+        $bun = "$env:USERPROFILE\.bun\bin\bun.exe"
+        if (!(Test-Path $bun)) {
+            # Fallback: try to find bun.exe via Get-Command
+            $bunCmd = Get-Command bun -EA 0 | Where-Object { $_.Source -like '*.exe' } | Select-Object -First 1
+            if ($bunCmd) { $bun = $bunCmd.Source }
+            else {
+                Write-Host "ERROR: bun.exe not found. Install from https://bun.sh" -ForegroundColor Red
+                exit 1
+            }
+        }
 
         $bunArgs = @('scripts/production.ts', '--skip-build')
         if ($Watch -eq 1) { $bunArgs += '--watch' }
