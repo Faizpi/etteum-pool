@@ -25,6 +25,7 @@ const MAX_REQUEST_LOGS = 200;
 async function upsertUsageSummary(entry: {
   provider: string;
   model: string;
+  comboName?: string;
   status: string;
   promptTokens: number;
   completionTokens: number;
@@ -37,12 +38,12 @@ async function upsertUsageSummary(entry: {
     bucket.setMinutes(0, 0, 0); // truncate to hour
 
     await db.run(sql`
-      INSERT INTO usage_summary (bucket, provider, model, total_requests, success_requests, error_requests, prompt_tokens, completion_tokens, total_tokens, credits_used, total_duration_ms)
-      VALUES (${bucket.toISOString()}, ${entry.provider || "unknown"}, ${entry.model || "unknown"}, 1,
+      INSERT INTO usage_summary (bucket, provider, model, combo_name, total_requests, success_requests, error_requests, prompt_tokens, completion_tokens, total_tokens, credits_used, total_duration_ms)
+      VALUES (${bucket.toISOString()}, ${entry.provider || "unknown"}, ${entry.model || "unknown"}, ${entry.comboName || null}, 1,
         ${entry.status === "success" ? 1 : 0}, ${entry.status === "error" ? 1 : 0},
         ${entry.promptTokens || 0}, ${entry.completionTokens || 0}, ${entry.totalTokens || 0},
         ${entry.creditsUsed || 0}, ${entry.durationMs || 0})
-      ON CONFLICT (bucket, provider, model) DO UPDATE SET
+      ON CONFLICT (bucket, provider, model, combo_name) DO UPDATE SET
         total_requests = usage_summary.total_requests + excluded.total_requests,
         success_requests = usage_summary.success_requests + excluded.success_requests,
         error_requests = usage_summary.error_requests + excluded.error_requests,
@@ -79,6 +80,7 @@ export async function recordRequest(entry: NewRequestLog) {
     void upsertUsageSummary({
       provider: entry.provider || "unknown",
       model: entry.model || "unknown",
+      comboName: entry.comboName,
       status: entry.status,
       promptTokens: entry.promptTokens || 0,
       completionTokens: entry.completionTokens || 0,
@@ -227,13 +229,59 @@ async function logProxyError(entry: NewRequestLog, label: string) {
     await db.insert(requestLogs).values(entry);
     // Also track errors in usage_summary
     void upsertUsageSummary({
-      provider: entry.provider || "unknown", model: entry.model || "unknown", status: "error",
+      provider: entry.provider || "unknown", model: entry.model || "unknown", comboName: entry.comboName, status: "error",
       promptTokens: 0, completionTokens: 0, totalTokens: 0, creditsUsed: 0, durationMs: entry.durationMs || 0,
     });
     if (++requestCounter % 10 === 0) void pruneRequestLogs();
   } catch (logError) {
     console.error(`[Proxy] Failed to log ${label}:`, logError);
   }
+}
+
+/**
+ * Detect whether a parsed SSE chunk payload represents an upstream service error.
+ *
+ * False positives to avoid (this is the whole point of this helper):
+ *  - Tool result reporting an error to the model (error inside delta/content)
+ *  - OpenAI refusal message in streaming delta
+ *  - Any chunk that has a `error` field inside a normal message structure
+ *
+ * True positives:
+ *  - Qoder: { type: "upstream_error", error: "..." }
+ *  - Qoder: { code: "112", statusCodeValue: 403, message: "..." }
+ *  - OpenAI service error: { error: { message, type, code } } (no choices/id)
+ *  - Anthropic service error: { type: "error", error: {...} }
+ */
+export function isStreamErrorResponse(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const p = payload as Record<string, unknown>;
+
+  // Qoder explicit signal
+  if (p.type === "upstream_error") return true;
+
+  // Qoder in-body 403 (statusCodeValue is at top-level, not inside a chunk)
+  if (typeof p.statusCodeValue === "number" && p.statusCodeValue >= 400) return true;
+
+  // Anthropic service error: { type: "error", error: { ... } }
+  if (p.type === "error" && p.error) return true;
+
+  // OpenAI service-level error: { error: { message, type } }  (no choices / id / delta)
+  // A normal streaming chunk has choices + id.  Tool errors live INSIDE delta/content.
+  // So requiring the absence of choices + id excludes all false positives.
+  if (
+    p.error &&
+    typeof p.error === "object" &&
+    !Array.isArray(p.error) &&
+    !p.choices &&
+    !p.id &&
+    !p.delta &&
+    !p.content_block &&
+    !p.index
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function wrapStreamWithUsageFinalizer(
@@ -244,6 +292,7 @@ function wrapStreamWithUsageFinalizer(
     accountEmail: string;
     provider: keyof typeof providers;
     model: string;
+    comboName?: string;
     quotaBefore: number;
     startedAt: number;
     fallbackPromptTokens: number;
@@ -279,16 +328,7 @@ function wrapStreamWithUsageFinalizer(
       if (trimmedPayload && trimmedPayload !== "[DONE]") {
         try {
           const parsed = JSON.parse(trimmedPayload);
-          // Qoder upstream error: { type: "upstream_error", error: "message" }
-          if (parsed.type === "upstream_error") {
-            streamError = true;
-          }
-          // Qoder format: {"code":"112","statusCodeValue":403,"message":"..."}
-          if (parsed.statusCodeValue && parsed.statusCodeValue >= 400) {
-            streamError = true;
-          }
-          // OpenAI format: {"error": {"message": "...", "type": "..."}}
-          if (parsed.error && (typeof parsed.error === "object" || typeof parsed.error === "string")) {
+          if (isStreamErrorResponse(parsed)) {
             streamError = true;
           }
         } catch {
@@ -411,7 +451,7 @@ function wrapStreamWithUsageFinalizer(
 
         // Upsert to usage_summary + periodic prune
         void upsertUsageSummary({
-          provider: context.provider, model: context.model, status: "success",
+          provider: context.provider, model: context.model, comboName: context.comboName, status: "success",
           promptTokens: finalPromptTokens, completionTokens: finalCompletionTokens,
           totalTokens: finalTotalTokens, creditsUsed, durationMs,
         });
@@ -492,7 +532,7 @@ async function handleChatCompletion(body: ChatCompletionRequest) {
   // Claude Code's hardcoded haiku/sonnet/opus ids -> a model in the pool).
   body = { ...body, model: resolveModelAlias(normalizeModelId(body.model)) };
   const isStream = body.stream === true;
-  const { result, account, provider, durationMs, compressionStats } = await routeRequest(body, isStream);
+  const { result, account, provider, durationMs, compressionStats, comboName, resolvedModel } = await routeRequest(body, isStream);
   let shouldReleaseTracking = true;
 
   try {
@@ -530,7 +570,8 @@ async function handleChatCompletion(body: ChatCompletionRequest) {
     accountId: account.id,
     accountEmail: account.email,
     provider,
-    model: body.model,
+    model: resolvedModel || body.model,
+    comboName,
     promptTokens,
     completionTokens,
     totalTokens,
@@ -570,7 +611,8 @@ async function handleChatCompletion(body: ChatCompletionRequest) {
       accountId: account.id,
       accountEmail: account.email,
       provider,
-      model: body.model,
+      model: resolvedModel || body.model,
+      comboName,
       quotaBefore,
       startedAt: Date.now() - durationMs,
       fallbackPromptTokens: promptTokens,
@@ -588,7 +630,7 @@ async function handleChatCompletion(body: ChatCompletionRequest) {
 
   // Upsert to usage_summary + periodic prune
   void upsertUsageSummary({
-    provider, model: body.model, status: "success",
+    provider, model: resolvedModel || body.model, comboName, status: "success",
     promptTokens, completionTokens, totalTokens, creditsUsed, durationMs,
   });
   if (++requestCounter % 10 === 0) void pruneRequestLogs();
@@ -684,11 +726,23 @@ proxyRouter.post("/v1/chat/completions", async (c) => {
       error instanceof Error ? error.message : String(error);
     const mappedModel = resolveModelAlias(normalizeModelId(body.model));
 
+    // Detect if the original model was a combo name (before alias resolution)
+    const originalModel = body.model;
+    let comboName: string | undefined;
+    // Quick check: if mappedModel is in the combo cache, it's a combo name
+    try {
+      const combos = await import("./router").then(m => m.resolveModelChain(originalModel, 0));
+      if (combos.length > 1 || combos[0] !== originalModel) {
+        comboName = originalModel;
+      }
+    } catch { /* ignore */ }
+
     // Log the error without masking the original proxy failure.
     const provider = pool.getProviderForModel(mappedModel) || "unknown";
     await logProxyError({
       provider,
       model: mappedModel,
+      comboName,
       status: "error",
       errorMessage,
       requestBody: prepareLogBody({ ...body, model: mappedModel, _poolprox: { originalModel: body.model } }),
